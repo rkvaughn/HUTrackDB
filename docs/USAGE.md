@@ -21,30 +21,42 @@ Alaska.** For CONUS only, filter `landfall_admin1`.
 
 ## Loading
 
-**geopandas / GeoPackage**
+**GeoParquet — committed to the repo, works from a fresh clone**
+
+Every table is GeoParquet, so geometry comes back ready to plot:
 
 ```python
 import geopandas as gpd
 
-landfalls = gpd.read_file("data/processed/hutrackdb.gpkg", layer="landfalls")
-tracks    = gpd.read_file("data/processed/hutrackdb.gpkg", layer="storms")
-points    = gpd.read_file("data/processed/hutrackdb.gpkg", layer="track_points")
+landfalls = gpd.read_parquet("data/processed/parquet/landfalls.parquet")
+tracks    = gpd.read_parquet("data/processed/parquet/storms.parquet")
+points    = gpd.read_parquet("data/processed/parquet/track_points.parquet")
 ```
 
-**pandas / Parquet** (faster, no geometry parsing)
+Skip the geometry when you only need columns — it is substantially faster:
 
 ```python
 import pandas as pd
 landfalls = pd.read_parquet("data/processed/parquet/landfalls.parquet")
+landfalls = landfalls.drop(columns="geometry")
 ```
 
-**SQLite** (no geospatial stack needed)
+**GeoPackage / SQLite** — identical content, but not in version control.
+Run `python -m hutrackdb build` to generate them:
+
+```python
+import geopandas as gpd
+landfalls = gpd.read_file("data/processed/hutrackdb.gpkg", layer="landfalls")
+```
 
 ```python
 import sqlite3, pandas as pd
 con = sqlite3.connect("data/processed/hutrackdb.sqlite")
 df = pd.read_sql("SELECT * FROM landfalls WHERE is_landfall = 1", con)
 ```
+
+> The SQL examples below are written for the SQLite build. Against Parquet, the
+> same logic is pandas: `landfalls[landfalls.is_landfall & landfalls.is_us_landfall]`.
 
 ---
 

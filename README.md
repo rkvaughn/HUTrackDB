@@ -32,9 +32,29 @@ classified and explained in the QA report.
 
 ## Quick start
 
+The built **Parquet tables ship with this repository** (~5 MB), so you can query
+the database immediately — no download, no build step:
+
 ```bash
 python -m venv .venv && .venv/bin/pip install -e .
 ```
+
+```python
+import geopandas as gpd
+landfalls = gpd.read_parquet("data/processed/parquet/landfalls.parquet")
+us = landfalls[landfalls.is_landfall & landfalls.is_us_landfall]
+```
+
+The EDA and validation notebook likewise runs straight from a fresh clone:
+
+```bash
+jupyter lab notebooks/eda_validation.ipynb
+```
+
+### Rebuilding from source
+
+Optional — regenerates the same Parquet tables plus the GeoPackage and SQLite
+builds:
 
 ```bash
 python scripts/fetch_sources.py     # download HURDAT2 + coastline + reference
@@ -50,19 +70,20 @@ python -m hutrackdb qa              # validate against All U.S. Hurricanes
 
 Outputs land in `data/processed/`:
 
-| File | Use |
-|---|---|
-| `hutrackdb.gpkg` | Single-file geodatabase — opens directly in geopandas, QGIS, ArcGIS |
-| `parquet/` | GeoParquet per table — the Snowflake staging format |
-| `hutrackdb.sqlite` | Plain relational, with foreign keys and indexes |
-| `snowflake_ddl.sql` | Snowflake DDL, GEOGRAPHY views, and COPY INTO template |
-| `qa_report.md` | Validation report |
+| File | In git? | Use |
+|---|---|---|
+| `parquet/` | **yes** (~5 MB) | GeoParquet per table — geometry included; also the Snowflake staging format |
+| `hutrackdb.gpkg` | no (23 MB) | Single-file geodatabase — opens directly in geopandas, QGIS, ArcGIS |
+| `hutrackdb.sqlite` | no (27 MB) | Plain relational, with foreign keys and indexes |
+| `snowflake_ddl.sql` | no | Snowflake DDL, GEOGRAPHY views, and COPY INTO template |
+| `qa_report.md` | no | Validation report |
 
-```python
-import geopandas as gpd
-landfalls = gpd.read_file("data/processed/hutrackdb.gpkg", layer="landfalls")
-us = landfalls[landfalls.is_landfall & landfalls.is_us_landfall]
-```
+Only the Parquet tables are committed. They carry the full content — every
+table is GeoParquet, so `gpd.read_parquet` returns geometry ready to plot. The
+GeoPackage and SQLite builds hold identical data but are large binaries that,
+being SQLite files with embedded write timestamps, are never byte-identical
+between builds; committing them would add a fresh multi-megabyte blob to git
+history on every rebuild. Regenerate them with `python -m hutrackdb build`.
 
 ---
 
@@ -250,8 +271,11 @@ Discrepancies are **classified, not suppressed**:
 
 ```
 config/pipeline.yaml          all tunables + calibration provenance register
-data/raw/                     HURDAT2, coastline, reference list (with checksums)
-data/processed/               build outputs
+data/raw/                     HURDAT2, coastline, reference list (not in git)
+data/processed/parquet/       built tables — COMMITTED, ~5 MB
+data/reference/               small committed basemap for the notebook's map
+notebooks/
+  eda_validation.ipynb        EDA + 26 validation checks, executed with outputs
 src/hutrackdb/
   constants.py                sourced constants, each with its citation
   config.py                   config loading + calibration enforcement
