@@ -284,3 +284,36 @@ tests/                        parser, geometry, and detection tests
 
 SHA-256 checksums for every source are recorded in `config/pipeline.yaml` and
 written into the `pipeline_metadata` table of each build.
+
+---
+
+## License
+
+**Code: [MIT](LICENSE).** Free for any purpose — academic, commercial, or
+otherwise. Use, modify, redistribute, and sublicense without restriction; the
+only condition is that the copyright notice travels with substantial portions
+of the code. No copyleft obligation, so it can be vendored into proprietary
+work.
+
+**Data: no additional restrictions.** Every source this pipeline consumes is
+already free to use, so a build carries no licence encumbrance beyond the code:
+
+| Source | Terms |
+|---|---|
+| HURDAT2 (Atlantic, NE/N-Central Pacific) | US Government work — public domain (17 U.S.C. § 105) |
+| All U.S. Hurricanes list (NOAA/AOML) | US Government work — public domain |
+| Saffir-Simpson Hurricane Wind Scale (NHC) | US Government work — public domain |
+| Natural Earth 1:10m Admin-1 | Public domain ([terms of use](https://www.naturalearthdata.com/about/terms-of-use/)) |
+
+If you substitute your own coastline or gate file, that file's licence is
+yours to track — this project makes no claim over it.
+
+**Attribution.** Not legally required by MIT beyond the notice, but if this
+work supports a publication, citing NOAA's HURDAT2 alongside it is the
+courtesy the source data deserves.
+
+**Warranty.** None, per the MIT terms. Note in particular the limitations in
+[docs/LANDFALL_METHODOLOGY.md §8](docs/LANDFALL_METHODOLOGY.md) — coastline
+resolution bounds landfall precision, and pre-satellite-era counts are biased
+low. Validate against your own requirements before relying on this for
+operational or financial decisions.
