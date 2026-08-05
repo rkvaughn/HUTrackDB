@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hutrackdb"
+version = "1.0.0"
+description = "Curated Atlantic and Pacific hurricane track geodatabase from NOAA HURDAT2, with landfall detection and QA."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+dependencies = [
+    "geopandas>=1.0",
+    "shapely>=2.0",       # vectorised predicates (contains_xy) are required
+    "pyproj>=3.6",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+    "pyogrio>=0.7",
+    "PyYAML>=6.0",
+    "requests>=2.31",
+    "Rtree>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+snowflake = ["snowflake-connector-python>=3.6"]
+
+[project.scripts]
+hutrackdb = "hutrackdb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+    # geopandas warns on any operation in a geographic CRS; the pipeline
+    # projects deliberately where it matters and uses geodesic maths elsewhere.
+    "ignore:Geometry is in a geographic CRS:UserWarning",
+]

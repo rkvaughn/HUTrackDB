@@ -1,0 +1,181 @@
+# HUTrackDB pipeline configuration
+#
+# =============================================================================
+# CALIBRATION PROVENANCE REGISTER
+# =============================================================================
+# This project forbids fabricated quantitative values. Every tunable number
+# below therefore carries:
+#
+#   value    - the number in force
+#   status   - one of:
+#                sourced    : traceable to an external authority or a project
+#                             data file; usable without further approval
+#                confirmed  : no external source exists; explicitly approved
+#                             by the PI on the date recorded
+#                UNCONFIRMED: no source and no approval. The pipeline REFUSES
+#                             TO RUN while any in-use parameter has this
+#                             status. Set a value and change the status only
+#                             with PI approval.
+#   source   - citation (URL / document / data file) or the approval record
+#
+# hutrackdb.config enforces this at load time. Do not add a bare number to
+# this file without the accompanying status and source keys.
+# =============================================================================
+
+calibration:
+
+  bypass_radius_km:
+    value: 111.12
+    status: confirmed
+    confirmed_by: PI
+    confirmed_on: 2026-08-05
+    source: >
+      60 nautical miles exactly (60 x 1.852 km/nmi = 111.12 km). Adopted from
+      the default proximity search radius used by NOAA's Historical Hurricane
+      Tracks tool (https://coast.noaa.gov/hurricanes/), which is a designated
+      cross-check reference for this project. Using the same radius as the
+      reference tool makes bypass counts directly comparable against it.
+      NOTE: this parameter only sets the boolean `is_bypass` label. The
+      continuous field `min_distance_to_coast_km` is written to every track
+      point unconditionally, so any downstream team may re-threshold at any
+      radius without re-running the pipeline.
+
+  gate_spacing_km:
+    value: 50.0
+    status: confirmed
+    confirmed_by: PI
+    confirmed_on: 2026-08-05
+    source: >
+      No external authority defines a coastal gate spacing; this is an
+      analyst-chosen resolution explicitly approved by the PI on 2026-08-05
+      in preference to a county-keyed alternative. It controls only the
+      granularity of the DEFAULT synthetic gate set. The gate module is
+      swappable: a user-supplied gate file bypasses this parameter entirely
+      (see docs/GATES.md).
+
+  landfall_segment_step_km:
+    value: 1.0
+    status: sourced
+    source: >
+      Numerical tolerance, not a substantive calibration. This is the maximum
+      chord length used when densifying a great-circle track segment before
+      intersecting it with the land polygon, and therefore bounds the
+      positional error of a computed landfall crossing point. It is set at
+      1.0 km because that is finer than the positional precision of the
+      source data itself: HURDAT2 records latitude/longitude to 0.1 degree,
+      i.e. ~11.1 km of latitude (HURDAT2 format specification, data-line
+      fields 5-6). Densifying below the data's own precision cannot add
+      accuracy, so this value is bounded by the source rather than chosen.
+
+# =============================================================================
+# LANDFALL DEFINITION
+# =============================================================================
+# The landfall rule is deliberately geometric and threshold-free: a landfall
+# occurs where the storm-center track crosses from water into a land polygon.
+# There is no distance cutoff to tune. See docs/LANDFALL_METHODOLOGY.md.
+landfall:
+
+  # Barrier islands: PI decision 2026-08-05 was "both, as separate columns".
+  # Implemented WITHOUT an invented area threshold:
+  #   is_landfall           - true for a crossing onto ANY land polygon
+  #                           (inclusive definition; matches NHC practice and
+  #                           therefore matches HURDAT2's own native L flags)
+  #   is_mainland_landfall  - true only when the land struck is the single
+  #                           largest connected landmass (continental North
+  #                           America). Determined by structural identity, not
+  #                           by an area cutoff.
+  #   landmass_area_km2     - the actual area of the landmass struck, emitted
+  #                           as a continuous column so any team may draw its
+  #                           own island/mainland boundary post hoc.
+  emit_mainland_column: true
+  emit_landmass_area: true
+
+  # Require the system to be a tropical/subtropical cyclone at the crossing
+  # for the crossing to be labelled a landfall. HURDAT2 status codes
+  # TD/TS/HU/SD/SS. Extratropical crossings are still recorded but flagged via
+  # the `status` column; set false to label them as landfalls too.
+  require_tropical_status: false
+
+  # Minimum intensity for a crossing to be recorded. null = record all
+  # crossings regardless of intensity. Filtering is left to downstream users
+  # so the database stays generic.
+  min_wind_kt: null
+
+# =============================================================================
+# COASTLINE / LAND POLYGON SOURCE  (swappable - see docs/COASTLINE.md)
+# =============================================================================
+coastline:
+  # Default: Natural Earth 1:10m Admin-1 States/Provinces. Public domain.
+  # Chosen because a single file supplies BOTH the land polygon used for
+  # crossing detection AND the state/country attribution needed for the
+  # landfall_state field, avoiding a second, possibly inconsistent, source.
+  source_name: natural_earth_10m_admin_1
+  path: data/raw/coastline/ne_10m_admin_1_states_provinces/ne_10m_admin_1_states_provinces.shp
+  url: https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip
+  retrieved: 2026-08-05
+  sha256: efc59726337323058f9446210adc96673179cd344e053666ee3d28cb58ba2b05
+  license: Public domain (Natural Earth)
+
+  # ---- USER OVERRIDE -------------------------------------------------------
+  # To substitute a higher-resolution or proprietary coastline, set
+  # `override_path` to any file geopandas can read (.shp/.gpkg/.geojson/
+  # .parquet) containing polygon geometry, and map the attribute columns.
+  # Nothing else in the pipeline needs to change.
+  # Example: NOAA Medium Resolution Shoreline, or Census TIGER/Line.
+  override_path: null
+  # Column in the override file naming the first-level admin unit (US state).
+  admin1_column: name
+  # Column naming the country.
+  country_column: admin
+  # Column holding an ISO country code, used to identify US features.
+  iso_country_column: iso_a2
+
+# =============================================================================
+# LANDFALL GATES  (swappable - see docs/GATES.md)
+# =============================================================================
+gates:
+  # Generator for the default gate set: `uniform` places gates at fixed
+  # spacing along the extracted coastline (spacing from calibration above).
+  generator: uniform
+
+  # ---- USER OVERRIDE -------------------------------------------------------
+  # Drop in a proprietary gate set by pointing `override_path` at a file in
+  # the documented gate interchange format (GeoJSON/GPKG/CSV; see
+  # docs/GATES.md for the required columns). The core pipeline logic is
+  # untouched by this substitution.
+  override_path: null
+
+  # Region filter for default gate generation. Gates are generated only along
+  # the coastlines of these countries (ISO A2). Keeps the default set focused
+  # on the US and the adjacent coasts storms traverse before reaching it.
+  countries: [US, MX, BS, CU, CA, BZ, JM, HT, DO, PR, VI, KY, TC]
+
+# =============================================================================
+# BASIN SCOPE
+# =============================================================================
+basins:
+  atlantic:
+    enabled: true
+    path: data/raw/hurdat2/hurdat2-atl-1851-2025-02272026.txt
+    url: https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt
+    retrieved: 2026-08-05
+    sha256: 1b9b0c7beed5b4505838658b1d30e159fc84330c60891a58cfcf43ae55c37202
+  pacific:
+    enabled: true
+    path: data/raw/hurdat2/hurdat2-nepac-1949-2025-02272026.txt
+    url: https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt
+    retrieved: 2026-08-05
+    sha256: db65f8bc538d5c05e15f738c96111861d6ce3572c007879de58e44d4d05a9cd6
+
+# =============================================================================
+# OUTPUT
+# =============================================================================
+output:
+  dir: data/processed
+  geopackage: hutrackdb.gpkg
+  sqlite: hutrackdb.sqlite
+  parquet_dir: parquet
+  # Snowflake DDL is emitted here; loading is a separate, credentialed step.
+  snowflake_ddl: snowflake_ddl.sql
+  snowflake_database: HUTRACKDB
+  snowflake_schema: PUBLIC
