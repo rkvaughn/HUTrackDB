@@ -198,3 +198,18 @@ from real misses, and that distinction is the point of it.
 When changing a figure, render it and look at the image before calling it done.
 Layout failures — label collisions, unreadable shared axes, wrong aspect ratio —
 are invisible in the code and have all occurred here.
+
+**Also check the notebook's stderr, not just its figures.** After executing,
+confirm there are zero stderr blocks; warnings are easy to miss when the images
+look right. Two matplotlib traps have already bitten this repo:
+
+- **Font names.** matplotlib resolves fonts by real installed name and does not
+  understand the CSS generic `system-ui`. Naming it emitted a findfont warning
+  for *every text object drawn* — 4,589 of them across 10 cells. Set
+  `font.family` to a generic matplotlib knows (`sans-serif`) and put real names
+  in `font.sans-serif`, resolved against `font_manager` so it degrades to DejaVu
+  Sans (which ships with matplotlib) on machines without the macOS faces.
+  Likewise ask for `bold`, not numeric weight `600`, which most installed sans
+  faces lack.
+- **Non-ASCII glyphs in figure text.** Helvetica Neue has no `←`/`→`, so they
+  render as tofu with only a warning to indicate it. Keep figure text ASCII.
