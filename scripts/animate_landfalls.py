@@ -13,6 +13,8 @@ seasons persist as a faint trail so the map fills in over 175 years.
   marker          system type at the leading edge of a growing track
   bright track    the season currently being drawn
   faint trail     every season already drawn
+  faded icon      left on the coast at every past landfall, keeping the storm's
+                  marker shape, so impact locations accumulate over the record
 
 This is a visualisation, not an analysis: nothing here is used by the pipeline
 or the QA layer. It reads the committed Parquet tables, so it runs from a fresh
@@ -52,6 +54,9 @@ WIND_CMAP = LinearSegmentedColormap.from_list(
     "wind", ["#ffe9a8", "#f7c245", "#ef8b2c", "#e2542a", "#c02020", "#7d0f2b"]
 )
 OCEAN, LAND, COASTLINE = "#0d1b2a", "#22303f", "#3d4f60"
+# Faded, light treatment for the accumulating impact icons -- same family
+# as the track trail, so history recedes and the live season stays dominant.
+IMPACT_FACE, IMPACT_EDGE = "#f5e2b8", "#c98f5a"
 INK, INK_MUTED = "#f2f2ef", "#9aa5b1"
 
 #: Marker per system type. Shape carries type, colour carries wind, so the two
@@ -172,6 +177,19 @@ def build(args) -> int:
              "lon": track.longitude.to_numpy(), "lat": track.latitude.to_numpy()}
         )
 
+    # Landfall positions, indexed by season, for the impact icons left behind.
+    # Scope matches the animation's title: continental U.S. landfalls only.
+    season_of = tracks.groupby("storm_id").season.first()
+    impacts_by_season: dict[int, list] = {}
+    for row in hit.itertuples(index=False):
+        season = season_of.get(row.storm_id)
+        if season is None or pd.isna(row.exact_lon) or pd.isna(row.exact_lat):
+            continue
+        impacts_by_season.setdefault(int(season), []).append(
+            (system_type(row.status_at_landfall, row.exact_wind_kt),
+             float(row.exact_lon), float(row.exact_lat))
+        )
+
     vmax = float(np.nanmax([np.nanmax(s["wind"]) for v in by_season.values() for s in v]))
     norm = Normalize(vmin=20, vmax=vmax)
 
@@ -196,6 +214,18 @@ def build(args) -> int:
                             capstyle="round")
     ax.add_collection(trail)
     ax.add_collection(active)
+
+    # Impact points left behind at each landfall, keeping the storm's marker
+    # shape so type stays readable, but faded and light like the track trail so
+    # they read as accumulated history rather than competing with the live
+    # season. Sits above the trail and below the active tracks.
+    impacts = {
+        key: ax.plot([], [], marker=marker, linestyle="none", markersize=4.5,
+                     markerfacecolor=IMPACT_FACE, markeredgecolor=IMPACT_EDGE,
+                     markeredgewidth=0.4, alpha=0.42, zorder=3)[0]
+        for key, (marker, _label) in TYPE_MARKER.items()
+    }
+    impact_xy = {key: ([], []) for key in TYPE_MARKER}
     heads = {
         key: ax.plot([], [], marker=marker, linestyle="none", markersize=7,
                      markerfacecolor="#fff2cc", markeredgecolor="#7d0f2b",
@@ -227,6 +257,9 @@ def build(args) -> int:
         loc="lower left", frameon=False, fontsize=9, labelcolor=INK_MUTED,
         ncols=2, bbox_to_anchor=(0.008, 0.008),
     )
+    # Sits clear above the two-row legend block, which reaches about y=0.12.
+    ax.text(0.008, 0.163, "faded icons mark where past storms came ashore",
+            transform=ax.transAxes, fontsize=8.5, color=IMPACT_FACE, alpha=0.8)
     fig.text(0.012, 0.022,
              "HUTrackDB — storms with a continental U.S. landfall, "
              "NOAA HURDAT2 1851-2025",
@@ -235,7 +268,7 @@ def build(args) -> int:
     steps = args.steps_per_season
     frames = len(seasons) * steps
     trail_segs: list = []
-    cumulative = {"storms": 0}
+    cumulative = {"storms": 0, "impacts": 0}
     state = {"season_index": -1}
 
     def render(frame):
@@ -246,9 +279,17 @@ def build(args) -> int:
         # A new season: retire the previous season's tracks into the trail.
         if season_index != state["season_index"]:
             if state["season_index"] >= 0:
-                for storm in by_season.get(seasons[state["season_index"]], []):
+                done = seasons[state["season_index"]]
+                for storm in by_season.get(done, []):
                     trail_segs.extend(storm["segs"])
-                cumulative["storms"] += len(by_season.get(seasons[state["season_index"]], []))
+                cumulative["storms"] += len(by_season.get(done, []))
+                # Leave an icon on the coast at each of that season's landfalls.
+                for kind, lon_i, lat_i in impacts_by_season.get(done, []):
+                    impact_xy[kind][0].append(lon_i)
+                    impact_xy[kind][1].append(lat_i)
+                    cumulative["impacts"] += 1
+                for kind, artist in impacts.items():
+                    artist.set_data(impact_xy[kind][0], impact_xy[kind][1])
             trail.set_segments(trail_segs)
             state["season_index"] = season_index
 
@@ -278,12 +319,13 @@ def build(args) -> int:
             marker.set_data(head_xy[key][0], head_xy[key][1])
 
         title.set_text(f"{season}")
+        season_impacts = len(impacts_by_season.get(season, []))
         subtitle.set_text(
             f"{len(storms)} landfalling storm{'s' if len(storms) != 1 else ''} "
-            f"this season   ·   {cumulative['storms'] + len(storms):,} since "
-            f"{seasons[0]}"
+            f"this season   ·   {cumulative['storms'] + len(storms):,} storms and "
+            f"{cumulative['impacts'] + season_impacts:,} landfalls since {seasons[0]}"
         )
-        return [trail, active, title, subtitle, *heads.values()]
+        return [trail, active, title, subtitle, *heads.values(), *impacts.values()]
 
     out = Path(args.out) if args.out else ROOT / "data" / "processed" / "landfalling_storms.gif"
     out.parent.mkdir(parents=True, exist_ok=True)
