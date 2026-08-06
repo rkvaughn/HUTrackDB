@@ -4,7 +4,7 @@
     python scripts/animate_landfalls.py
     python scripts/animate_landfalls.py --seasons 1990 2005 --fps 8
     python scripts/animate_landfalls.py --out /tmp/storms.gif --width 1100
-    python scripts/animate_landfalls.py --preset share      # ~2 MB, chat-friendly
+    python scripts/animate_landfalls.py --preset share      # small; README hero
 
 One frame group per season, advancing chronologically. Within a season the
 tracks of that season's landfalling storms grow from genesis to lysis; finished
@@ -532,7 +532,7 @@ def main() -> int:
         if not any(f.startswith("--colors") for f in supplied):
             args.colors = 64
         if args.out is None:
-            args.out = ROOT / "data" / "processed" / "landfalling_storms_share.gif"
+            args.out = ROOT / "docs" / "assets" / "landfalling_storms.gif"
     return build(args)
 
 

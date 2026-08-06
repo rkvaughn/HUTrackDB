@@ -228,6 +228,14 @@ Then verify before committing:
    | `docs/GATES.md` | default gate count |
    | `docs/USAGE.md` | timing-difference count |
 
+4. **The README's animation.** `docs/assets/landfalling_storms.gif` is committed
+   (891 KB) because it is the repository's landing-page image, and it is derived
+   from the same tables. Regenerate with
+   `python scripts/animate_landfalls.py --preset share`, which writes to that
+   path by default. It is the one build-derived binary that IS committed; keep
+   it small, and do not move the large full-resolution render into git alongside
+   it.
+
    `grep -rn "3,266\|87,631\|4,260\|5,007" README.md docs/` finds most of them.
 
 ### Never commit

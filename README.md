@@ -10,6 +10,14 @@ because HURDAT2's own landfall flagging has documented gaps.
 Built to be consumed by multiple downstream teams — the schema is generic and
 documented, not tailored to one analysis.
 
+![Every U.S.-landfalling storm, 1851–2025](docs/assets/landfalling_storms.gif)
+
+*Every storm with a continental U.S. landfall, genesis to lysis, one season per
+beat. Track colour and width follow maximum sustained wind on each segment;
+marker shape follows system type; a faded icon stays on the coast at each past
+landfall, so 1,548 impact points accumulate into the coastal band. Generated
+from the committed tables by [`scripts/animate_landfalls.py`](scripts/animate_landfalls.py).*
+
 ---
 
 ## What's in the current build
@@ -315,6 +323,8 @@ scripts/
   fetch_sources.py            download + checksum the default sources
   make_basemap.py             refresh the notebook's display basemap
   animate_landfalls.py        animated map of every landfalling storm (for fun)
+docs/assets/
+  landfalling_storms.gif      README animation; regenerate with --preset share
 docs/                         methodology, fields, gates, coastline
 tests/                        parser, geometry, and detection tests
 ```
