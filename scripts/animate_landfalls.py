@@ -268,7 +268,7 @@ def build(args) -> int:
     steps = args.steps_per_season
     frames = len(seasons) * steps
     trail_segs: list = []
-    cumulative = {"storms": 0, "impacts": 0}
+    cumulative = {"storms": 0}
     state = {"season_index": -1}
 
     def render(frame):
@@ -287,7 +287,6 @@ def build(args) -> int:
                 for kind, lon_i, lat_i in impacts_by_season.get(done, []):
                     impact_xy[kind][0].append(lon_i)
                     impact_xy[kind][1].append(lat_i)
-                    cumulative["impacts"] += 1
                 for kind, artist in impacts.items():
                     artist.set_data(impact_xy[kind][0], impact_xy[kind][1])
             trail.set_segments(trail_segs)
@@ -319,11 +318,16 @@ def build(args) -> int:
             marker.set_data(head_xy[key][0], head_xy[key][1])
 
         title.set_text(f"{season}")
-        season_impacts = len(impacts_by_season.get(season, []))
+        # Counts STORMS, not crossings. by_season holds one entry per storm, and
+        # only storms with a continental U.S. landfall are loaded at all, so
+        # len(storms) is already "storms with at least one landfall this season".
+        # The impact icons on the coast are per crossing -- a storm that struck a
+        # barrier island and then the mainland leaves two -- so the two numbers
+        # deliberately do not match, and only the storm count is reported.
         subtitle.set_text(
             f"{len(storms)} landfalling storm{'s' if len(storms) != 1 else ''} "
-            f"this season   ·   {cumulative['storms'] + len(storms):,} storms and "
-            f"{cumulative['impacts'] + season_impacts:,} landfalls since {seasons[0]}"
+            f"this season   ·   {cumulative['storms'] + len(storms):,} storms with a "
+            f"U.S. landfall since {seasons[0]}"
         )
         return [trail, active, title, subtitle, *heads.values(), *impacts.values()]
 
