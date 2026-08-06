@@ -249,6 +249,24 @@ def _compare(reference: ReferenceList, landfalls: pd.DataFrame,
     )
 
     conus = us[us["landfall_admin1"].isin(CONUS_COASTAL_STATES)]
+
+    # Guard against a silently-empty scope. CONUS_COASTAL_STATES holds full
+    # English state names, which is how the default coastline spells them. A
+    # substituted coastline may use abbreviations or another language, in which
+    # case this filter matches nothing and every comparison below would report a
+    # perfect zero-versus-reference mismatch that looks like a detection
+    # failure. Fail loudly with the actual values instead.
+    if len(us) and conus.empty:
+        observed = sorted(str(v) for v in us["landfall_admin1"].dropna().unique())
+        raise ValueError(
+            f"{len(us)} US landfalls were detected but none matched the "
+            f"continental-state name list, so the QA scope is empty.\n"
+            f"This normally means the coastline source spells admin units "
+            f"differently from the default.\n"
+            f"Observed landfall_admin1 values (first 25): {observed[:25]}\n"
+            f"Update CONUS_COASTAL_STATES in hutrackdb/qa/validate.py to match, "
+            f"or point coastline.admin1_column at a column using these names."
+        )
     hurricanes = conus[conus["exact_wind_kt"].fillna(0) >= HURRICANE_MIN_KT]
 
     # The reference lists one row per hurricane per US impact event, so

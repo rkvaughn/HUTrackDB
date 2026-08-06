@@ -1,70 +1,51 @@
 #!/usr/bin/env python3
-"""Derive the compact basemap the EDA notebook draws its map on.
+"""Regenerate the notebook's display basemap from the configured coastline.
 
     python scripts/make_basemap.py
 
-The pipeline's own coastline source is the full Natural Earth 1:10m Admin-1
-file (~10 MB zipped, ~30 MB extracted), which lives under data/raw/ and is not
-in version control. The notebook only needs land outlines as a visual backdrop,
-so this script extracts a small display-only subset that CAN be committed,
-letting the notebook run from a fresh clone without downloading anything.
+You do NOT normally need to run this: `python -m hutrackdb build` regenerates
+the basemap as part of every build, so it cannot fall out of step with the
+coastline the database was built from. This script exists for the case where you
+want to refresh the map extract alone -- for example after changing
+`basemap.bbox` or `basemap.countries` without re-running detection.
 
-Output: data/reference/basemap_na_coast.parquet
-
-This file is for DISPLAY ONLY. It is deliberately clipped and simplified and
-must never be used for landfall detection -- that always uses the full-precision
-coastline configured in config/pipeline.yaml. See docs/COASTLINE.md.
-
-Source: Natural Earth 1:10m Admin-1 States/Provinces, public domain.
+The extract is DISPLAY ONLY: clipped and simplified so a fresh clone can render
+the notebook's map without downloading the full coastline. Landfall detection
+always uses the full-precision source configured under `coastline`.
+See docs/COASTLINE.md.
 """
 
 from __future__ import annotations
 
+import argparse
+import logging
 import sys
 from pathlib import Path
 
-import geopandas as gpd
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-ROOT = Path(__file__).resolve().parent.parent
-SOURCE = (ROOT / "data/raw/coastline/ne_10m_admin_1_states_provinces"
-          / "ne_10m_admin_1_states_provinces.shp")
-TARGET = ROOT / "data/reference/basemap_na_coast.parquet"
-
-# Bounding box covering the Atlantic and Gulf coasts the notebook maps, padded
-# beyond the plotted extent so no polygon is cut at the frame edge.
-BBOX = (-102.0, 21.0, -63.0, 50.0)
-
-# Countries whose land appears in that window.
-COUNTRIES = ["US", "MX", "CU", "BS", "CA"]
-
-# Simplification tolerance in degrees, for display only.
-#
-# Bounded by the rendering resolution rather than chosen freely: the notebook
-# map spans ~33 degrees of longitude across roughly 1,000 device pixels, i.e.
-# ~0.033 deg/px. At 0.01 deg this simplification moves a vertex by well under a
-# third of a pixel, so it is invisible at the scale the file is ever drawn at.
-SIMPLIFY_DEG = 0.01
+from hutrackdb.config import Config              # noqa: E402
+from hutrackdb.geo.basemap import build_basemap  # noqa: E402
+from hutrackdb.geo.coastline import CoastlineSource  # noqa: E402
 
 
 def main() -> int:
-    if not SOURCE.exists():
-        print(f"source coastline not found: {SOURCE}\n"
-              f"Run scripts/fetch_sources.py first.", file=sys.stderr)
-        return 1
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default=None, help="path to pipeline.yaml")
+    args = parser.parse_args()
 
-    frame = gpd.read_file(SOURCE, columns=["name", "admin", "iso_a2"])
-    frame = frame[frame.iso_a2.isin(COUNTRIES)]
-    frame = frame.clip(BBOX)
-    frame = frame[~frame.geometry.is_empty & frame.geometry.notna()]
+    logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s")
 
-    # preserve_topology keeps polygons valid (no self-intersections introduced).
-    frame["geometry"] = frame.geometry.simplify(SIMPLIFY_DEG, preserve_topology=True)
+    config = Config.load(args.config)
+    coastline = CoastlineSource.from_config(config)
+    print(f"coastline source: {coastline.source_name}")
+    print(f"                  {coastline.path}")
 
-    TARGET.parent.mkdir(parents=True, exist_ok=True)
-    frame.to_parquet(TARGET, index=False)
-
-    print(f"wrote {TARGET.relative_to(ROOT)}")
-    print(f"  {len(frame)} features, {TARGET.stat().st_size / 1024:.0f} KB")
+    target = build_basemap(config, coastline)
+    if target is None:
+        print("basemap generation is disabled (basemap.enabled = false)")
+        return 0
+    print(f"wrote {target}")
     return 0
 
 

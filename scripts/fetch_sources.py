@@ -8,6 +8,15 @@
 HURDAT2 filenames carry their revision date, so NOAA publishes a NEW filename
 each season rather than updating one. ``--discover`` lists what is currently
 available on the NHC directory so the config can be pointed at a newer release.
+
+NOTE ON SUBSTITUTED INPUTS
+--------------------------
+This script fetches the DEFAULT sources. If you have set
+``coastline.override_path`` in config/pipeline.yaml, the Natural Earth download
+below is not used by the build and you may skip it -- the pipeline reads your
+file instead. The HURDAT2 files and the All U.S. Hurricanes reference are
+required either way: they are the storm data and the QA baseline, neither of
+which the coastline substitution replaces. See docs/COASTLINE.md.
 """
 
 from __future__ import annotations

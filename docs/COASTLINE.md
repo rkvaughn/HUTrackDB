@@ -76,6 +76,70 @@ self-intersections make the land union and containment tests unreliable.
 
 ---
 
+## The complete swap workflow
+
+Substituting a coastline is a **configuration change only** — no code is edited.
+This sequence is verified end to end: a coastline with entirely different column
+names plus a proprietary gate set was substituted, and `build` → `qa` →
+notebook all ran clean with 28/28 checks passing.
+
+**1.** Point the config at your file and map its columns:
+
+```yaml
+coastline:
+  override_path: /path/to/your_shoreline.gpkg
+  admin1_column: STATE_NAME     # whatever your file calls it
+  country_column: COUNTRY
+  iso_country_column: ISO_A2
+```
+
+**2.** Rebuild. This regenerates every output *and* the notebook's display
+basemap, so the map can never be left drawn on the old coastline:
+
+```bash
+python -m hutrackdb build
+```
+
+**3.** Re-validate, and read the report rather than just running it:
+
+```bash
+python -m hutrackdb qa
+```
+
+**4.** Re-execute the notebook so its committed figures match the new data:
+
+```bash
+python -m nbconvert --to notebook --execute --inplace notebooks/eda_validation.ipynb
+```
+
+The notebook prints the coastline and gate set that produced the build it is
+reading, under **SWAPPABLE INPUTS USED FOR THIS BUILD**, so you can confirm at a
+glance that it is not showing a stale database.
+
+### If your source names admin units differently
+
+`docs/USAGE.md`, the QA layer, and the notebook all filter continental US
+states by **full English name** (`"Florida"`, `"Texas"`), because that is how
+the default source spells them. A file using postal abbreviations or another
+language will not match.
+
+This fails **loudly**, not silently. Both the QA layer and the notebook check
+whether the continental filter matched anything and, if not, raise with the
+values actually present:
+
+```
+1568 US landfalls were detected but none matched the continental-state name
+list, so the QA scope is empty.
+Observed landfall_admin1 values (first 25): ['FL', 'LA', 'NC', 'TX', 'XX']
+Update CONUS_COASTAL_STATES in hutrackdb/qa/validate.py to match, or point
+coastline.admin1_column at a column using these names.
+```
+
+Fix it either by pointing `admin1_column` at a column that uses full names, or
+by editing the two state lists it names.
+
+---
+
 ## What changes when you swap it
 
 Re-run `python -m hutrackdb build` after changing the source. Expect these to

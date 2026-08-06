@@ -23,6 +23,7 @@ import pandas as pd
 
 from .config import Config
 from .geo.coastline import CoastlineSource
+from .geo.basemap import build_basemap
 from .geo.gates import build_gate_set
 from .landfall.detect import LandfallDetector
 from .landfall.enrich import build_bypass_table, build_storms_table, enrich_track_points
@@ -75,6 +76,10 @@ def run(config: Config | None = None) -> PipelineResult:
     coastline = CoastlineSource.from_config(config)
     gate_set = build_gate_set(config, coastline)
     detector = LandfallDetector(coastline, gate_set, config)
+
+    # Regenerate the notebook's display basemap from THIS build's coastline, so
+    # substituting a coastline can never leave the map drawn on the old one.
+    build_basemap(config, coastline)
 
     log.info("=== stage 3: landfall detection ===")
     storm_lookup = {s.storm_id: s for s in parsed.storms}

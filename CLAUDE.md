@@ -176,7 +176,8 @@ committing the Parquet in the same push.**
 Any change to:
 
 - `src/hutrackdb/**` — parsing, landfall detection, enrichment, writers
-- `config/pipeline.yaml` — calibrations, coastline source, gate settings, basin scope
+- `config/pipeline.yaml` — calibrations, coastline source, gate settings, basin
+  scope, basemap extent
 - the HURDAT2 source files (e.g. adopting a new season's release)
 - the coastline or gate inputs, including any `override_path`
 
@@ -188,8 +189,12 @@ rebuild.
 Run in this order; each step depends on the one before it:
 
 ```bash
-python -m hutrackdb build     # regenerates parquet/ + gpkg + sqlite + DDL
+python -m hutrackdb build     # parquet/ + gpkg + sqlite + DDL + notebook basemap
 ```
+
+`build` regenerates `data/reference/basemap_na_coast.parquet` from whichever
+coastline is configured, so a coastline swap can never leave the notebook's map
+drawn on the previous one. Do not hand-maintain that file.
 
 ```bash
 python -m hutrackdb qa        # re-validate; read the report, don't just run it

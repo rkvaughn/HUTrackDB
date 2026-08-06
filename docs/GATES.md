@@ -25,10 +25,35 @@ gates:
   override_path: /path/to/my_proprietary_gates.geojson
 ```
 
-That's it. When `override_path` is set, the built-in generator is bypassed
-entirely and `calibration.gate_spacing_km` is ignored. The `gate_id` values you
-supply are preserved verbatim into `landfalls.gate_id` and the
-`landfall_gates` table.
+**3.** Rebuild, re-validate, and re-execute the notebook:
+
+```bash
+python -m hutrackdb build
+```
+
+```bash
+python -m hutrackdb qa
+```
+
+```bash
+python -m nbconvert --to notebook --execute --inplace notebooks/eda_validation.ipynb
+```
+
+That's it — a configuration change, no code edited. When `override_path` is set
+the built-in generator is bypassed entirely and `calibration.gate_spacing_km` is
+ignored. The `gate_id` values you supply are preserved verbatim into
+`landfalls.gate_id` and the `landfall_gates` table.
+
+This path is verified end to end: a 12-gate proprietary set was substituted
+alongside a coastline with entirely different column names, and build, QA and
+the notebook all ran clean. The notebook prints the gate set origin under
+**SWAPPABLE INPUTS USED FOR THIS BUILD**, so you can confirm your set is the one
+in force:
+
+```
+gate set  : override:my_gates.geojson  (12 gates)
+            ^ user-supplied gate set in force
+```
 
 > Keep `gate_id` values **stable across releases** — they are the join key
 > downstream consumers will build on.

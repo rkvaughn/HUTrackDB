@@ -183,6 +183,28 @@ touching pipeline code.
 | **Coastline** | Natural Earth 1:10m Admin-1 (public domain) | `coastline.override_path` | [COASTLINE.md](docs/COASTLINE.md) |
 | **Landfall gates** | 5,007 uniform gates at 50 km spacing | `gates.override_path` | [GATES.md](docs/GATES.md) |
 
+Substituting either is a **configuration change only** — no code is edited.
+Point the config at your file, map its column names if they differ, then:
+
+```bash
+python -m hutrackdb build && python -m hutrackdb qa
+```
+
+```bash
+python -m nbconvert --to notebook --execute --inplace notebooks/eda_validation.ipynb
+```
+
+`build` also regenerates the notebook's display basemap from whichever coastline
+you configured, so the map can never be left drawn on the previous one. The
+notebook prints the coastline and gate set behind the build it is reading, so a
+stale database is visible immediately.
+
+This path is verified end to end: a coastline with entirely different column
+names plus a 12-gate proprietary set were substituted, and build, QA and the
+notebook all ran clean with 28/28 checks passing. If a substituted source spells
+admin units differently, the QA layer and notebook **fail loudly** with the
+values actually present rather than silently returning an empty scope.
+
 ```bash
 python -m hutrackdb gates --export my_gates.geojson   # start from the default
 ```
