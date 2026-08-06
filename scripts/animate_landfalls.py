@@ -4,6 +4,7 @@
     python scripts/animate_landfalls.py
     python scripts/animate_landfalls.py --seasons 1990 2005 --fps 8
     python scripts/animate_landfalls.py --out /tmp/storms.gif --width 1100
+    python scripts/animate_landfalls.py --preset share      # ~2 MB, chat-friendly
 
 One frame group per season, advancing chronologically. Within a season the
 tracks of that season's landfalling storms grow from genesis to lysis; finished
@@ -260,6 +261,14 @@ def build(args) -> int:
     coast = load_coastline(args.lon, args.lat)
 
     fig_w = args.width / 100
+    # Font and marker sizes are in POINTS, so they do not shrink with the
+    # figure. Without this scale factor a narrower render makes every label
+    # relatively larger, and the storm labels overflow the frame and collide.
+    # 900 px is the width the layout was tuned at.
+    scale = args.width / 900.0
+    def pt(size):
+        return size * scale
+
     fig, ax = plt.subplots(figsize=(fig_w, fig_w * 0.62), dpi=100)
     fig.patch.set_facecolor(OCEAN)
     ax.set_facecolor(OCEAN)
@@ -284,7 +293,7 @@ def build(args) -> int:
     # they read as accumulated history rather than competing with the live
     # season. Sits above the trail and below the active tracks.
     impacts = {
-        key: ax.plot([], [], marker=marker, linestyle="none", markersize=4.5,
+        key: ax.plot([], [], marker=marker, linestyle="none", markersize=pt(4.5),
                      markerfacecolor=IMPACT_FACE, markeredgecolor=IMPACT_EDGE,
                      markeredgewidth=0.4, alpha=0.42, zorder=3)[0]
         for key, (marker, _label) in TYPE_MARKER.items()
@@ -297,17 +306,17 @@ def build(args) -> int:
     for season, entries in labels_by_season.items():
         for text, lon_a, lat_a, dx, dy in entries:
             leader, = ax.plot([lon_a, lon_a + dx], [lat_a, lat_a + dy],
-                              color=IMPACT_EDGE, linewidth=0.7, alpha=0.0, zorder=7)
-            anchor_dot, = ax.plot([lon_a], [lat_a], marker="o", markersize=3.2,
+                              color=IMPACT_EDGE, linewidth=pt(0.7), alpha=0.0, zorder=7)
+            anchor_dot, = ax.plot([lon_a], [lat_a], marker="o", markersize=pt(3.2),
                                   color=INK, alpha=0.0, zorder=8)
-            txt = ax.text(lon_a + dx, lat_a + dy, text, fontsize=8.2,
+            txt = ax.text(lon_a + dx, lat_a + dy, text, fontsize=pt(8.2),
                           color=INK, alpha=0.0, zorder=8,
                           ha="left" if dx > 0 else "right",
                           va="bottom" if dy > 0 else "top",
                           fontweight="bold")
             label_artists.setdefault(season, []).append((leader, anchor_dot, txt))
     heads = {
-        key: ax.plot([], [], marker=marker, linestyle="none", markersize=7,
+        key: ax.plot([], [], marker=marker, linestyle="none", markersize=pt(7),
                      markerfacecolor="#fff2cc", markeredgecolor="#7d0f2b",
                      markeredgewidth=0.8, zorder=5)[0]
         for key, (marker, _label) in TYPE_MARKER.items()
@@ -318,34 +327,34 @@ def build(args) -> int:
     # against whatever storm happens to pass behind it.
     slab = dict(boxstyle="round,pad=0.35", facecolor=OCEAN, edgecolor="none",
                 alpha=0.78)
-    title = ax.text(0.012, 0.962, "", transform=ax.transAxes, fontsize=17,
+    title = ax.text(0.012, 0.962, "", transform=ax.transAxes, fontsize=pt(17),
                     fontweight="bold", color=INK, va="top", zorder=6, bbox=slab)
-    subtitle = ax.text(0.012, 0.888, "", transform=ax.transAxes, fontsize=10.5,
+    subtitle = ax.text(0.012, 0.888, "", transform=ax.transAxes, fontsize=pt(10.5),
                        color=INK_MUTED, va="top", zorder=6, bbox=slab)
 
     bar = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=WIND_CMAP), ax=ax,
                        fraction=0.022, pad=0.008)
-    bar.set_label("maximum sustained wind (kt)", color=INK_MUTED, fontsize=9)
-    bar.ax.tick_params(colors=INK_MUTED, labelsize=8)
+    bar.set_label("maximum sustained wind (kt)", color=INK_MUTED, fontsize=pt(9))
+    bar.ax.tick_params(colors=INK_MUTED, labelsize=pt(8))
     bar.outline.set_edgecolor(COASTLINE)
 
     ax.legend(
-        handles=[Line2D([0], [0], marker=m, linestyle="none", markersize=7,
+        handles=[Line2D([0], [0], marker=m, linestyle="none", markersize=pt(7),
                         markerfacecolor="#fff2cc", markeredgecolor="#7d0f2b",
                         label=lab)
                  for m, lab in TYPE_MARKER.values()],
-        loc="lower left", frameon=False, fontsize=9, labelcolor=INK_MUTED,
+        loc="lower left", frameon=False, fontsize=pt(9), labelcolor=INK_MUTED,
         ncols=2, bbox_to_anchor=(0.008, 0.008),
     )
     # Sits clear above the two-row legend block, which reaches about y=0.12.
     ax.text(0.008, 0.185, "faded icons mark where past storms came ashore",
-            transform=ax.transAxes, fontsize=8.5, color=IMPACT_FACE, alpha=0.8)
+            transform=ax.transAxes, fontsize=pt(8.5), color=IMPACT_FACE, alpha=0.8)
     ax.text(0.008, 0.152, "labelled: Cat 5 at landfall, and storms of note",
-            transform=ax.transAxes, fontsize=8.5, color=INK, alpha=0.75)
+            transform=ax.transAxes, fontsize=pt(8.5), color=INK, alpha=0.75)
     fig.text(0.012, 0.022,
              "HUTrackDB — storms with a continental U.S. landfall, "
              "NOAA HURDAT2 1851-2025",
-             color=INK_MUTED, fontsize=8.5)
+             color=INK_MUTED, fontsize=pt(8.5))
 
     steps = args.steps_per_season
     frames = len(seasons) * steps
@@ -437,8 +446,48 @@ def build(args) -> int:
               savefig_kwargs={"facecolor": OCEAN})
     plt.close(fig)
 
+    if out.suffix.lower() == ".gif" and args.colors:
+        before = out.stat().st_size
+        shrink_gif(out, args.colors, args.fps)
+        after = out.stat().st_size
+        print(f"palette pass: {before / 1e6:.1f} MB -> {after / 1e6:.1f} MB "
+              f"({args.colors} colours)")
+
     print(f"wrote {out}  ({out.stat().st_size / 1e6:.1f} MB)")
     return 0
+
+
+def shrink_gif(path: Path, colors: int, fps: int) -> None:
+    """Re-map every frame onto ONE shared palette.
+
+    matplotlib's writer quantises each frame independently, which both inflates
+    the file and makes flat areas shimmer as the palette shifts frame to frame.
+    Deriving a single palette from the final frame -- the richest, since the
+    trail and impact icons have fully accumulated -- fixes both.
+    """
+    from PIL import Image, ImageSequence
+
+    with Image.open(path) as src:
+        frames = [f.convert("RGB") for f in ImageSequence.Iterator(src)]
+
+    # Derive the palette from frames sampled ACROSS the run, not from the last
+    # one alone. Median-cut allocates by pixel count, and the final frame is
+    # nearly all blue trail and cream impact icons -- so the heat ramp's orange
+    # and red midtones were being quantised away, turning the colourbar grey.
+    # Mid-run frames carry large areas of bright active track and pull those
+    # hues back into the palette.
+    sample_idx = sorted({0, len(frames) // 4, len(frames) // 2,
+                         3 * len(frames) // 4, len(frames) - 1})
+    montage = Image.new("RGB", (frames[0].width, frames[0].height * len(sample_idx)))
+    for row, i in enumerate(sample_idx):
+        montage.paste(frames[i], (0, row * frames[0].height))
+    palette = montage.quantize(colors=colors, method=Image.MEDIANCUT)
+    # No dithering: it speckles flat areas, which defeats run-length encoding
+    # and measurably inflates the file. The only visible cost is mild banding
+    # on the colourbar gradient.
+    mapped = [f.quantize(palette=palette, dither=Image.NONE) for f in frames]
+    mapped[0].save(path, save_all=True, append_images=mapped[1:],
+                   duration=int(1000 / fps), loop=0, optimize=True, disposal=1)
 
 
 def main() -> int:
@@ -453,7 +502,28 @@ def main() -> int:
     parser.add_argument("--width", type=int, default=1000, help="pixels")
     parser.add_argument("--lon", nargs=2, type=float, default=(-100.0, -12.0))
     parser.add_argument("--lat", nargs=2, type=float, default=(7.0, 52.0))
-    return build(parser.parse_args())
+    parser.add_argument("--colors", type=int, default=96,
+                        help="GIF palette size; 0 disables the palette pass")
+    parser.add_argument("--preset", choices=["full", "share"], default="full",
+                        help="'share' trades resolution and frame count for a "
+                             "small file that uploads and animates readily in "
+                             "chat clients")
+    args = parser.parse_args()
+
+    if args.preset == "share":
+        # Only override what the user did not set explicitly.
+        supplied = set(sys.argv[1:])
+        if not any(f.startswith("--width") for f in supplied):
+            args.width = 620
+        if not any(f.startswith("--steps-per-season") for f in supplied):
+            args.steps_per_season = 1
+        if not any(f.startswith("--fps") for f in supplied):
+            args.fps = 10
+        if not any(f.startswith("--colors") for f in supplied):
+            args.colors = 64
+        if args.out is None:
+            args.out = ROOT / "data" / "processed" / "landfalling_storms_share.gif"
+    return build(args)
 
 
 if __name__ == "__main__":
