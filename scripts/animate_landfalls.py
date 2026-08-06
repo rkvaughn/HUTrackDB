@@ -69,6 +69,42 @@ TYPE_MARKER = {
 }
 TROPICAL_STATUSES = {"TD", "TS", "HU", "SD", "SS"}
 
+# ---------------------------------------------------------------------------
+# LABELLED STORMS
+#
+# Two sources, kept separate because they are different kinds of claim:
+#
+#   1. Category 5 AT a continental U.S. landfall — DERIVED from the data at run
+#      time (exact_wind_kt >= 137 at a landfall). Nothing is hardcoded; if the
+#      underlying record is revised, the label set follows.
+#   2. A curated list of storms of historical note — an EDITORIAL choice, not a
+#      data-derived one, so it is declared here in full rather than dressed up
+#      as a computed result. Display names for pre-1950 storms are the
+#      conventional historical ones; HURDAT2 itself records them as UNNAMED.
+#
+# The offsets place the label clear of the coast and of its neighbours; a leader
+# line ties it back to the landfall point.
+# ---------------------------------------------------------------------------
+NOTABLE = {
+    # dx/dy in degrees from the landfall point. Chosen to sit in open water --
+    # the Gulf interior or the Atlantic east of Florida -- and to stay inside
+    # the map extent; westward offsets on Gulf landfalls ran off the frame.
+    "AL011900": ("GALVESTON 1900",          -4.0,  -5.5),
+    "AL041928": ("OKEECHOBEE 1928",         11.0,  -1.0),
+    "AL031935": ("LABOR DAY 1935",           7.0,  -7.0),
+    "AL061938": ("GREAT NEW ENGLAND 1938",   8.5,   6.5),
+    "AL021957": ("AUDREY 1957",             -6.5,  -3.0),
+    "AL091969": ("CAMILLE 1969",            -4.0,  -7.5),
+    "AL111989": ("HUGO 1989",                9.0,   2.0),
+    "AL041992": ("ANDREW 1992",              9.0,  -5.0),
+    "AL122005": ("KATRINA 2005",             2.0,  -8.5),
+    "AL182012": ("SANDY 2012",               7.0,   4.0),
+    "AL092017": ("HARVEY 2017",             -2.5,  -8.0),
+    "AL142018": ("MICHAEL 2018",            -2.0,   6.0),
+    "AL092021": ("IDA 2021",                -7.5,  -5.5),
+    "AL092022": ("IAN 2022",                13.0,   3.0),
+}
+
 CONUS_STATES = [
     "Texas", "Louisiana", "Mississippi", "Alabama", "Florida", "Georgia",
     "South Carolina", "North Carolina", "Virginia", "Maryland", "Delaware",
@@ -124,11 +160,18 @@ def load(seasons=None):
     points = pd.read_parquet(PARQUET / "track_points.parquet")
     points = points.drop(columns="geometry", errors="ignore")
 
+    storms = pd.read_parquet(PARQUET / "storms.parquet")
+    storms = storms.drop(columns="geometry", errors="ignore")
     hit = landfalls[
         landfalls.is_landfall.astype(bool)
         & landfalls.is_us_landfall.astype(bool)
         & landfalls.landfall_admin1.isin(CONUS_STATES)
-    ]
+    ].merge(
+        # `storm_name`, not `name`: a column called `name` shadows the pandas
+        # Series `.name` attribute and row.name would silently return the index.
+        storms[["storm_id", "name"]].rename(columns={"name": "storm_name"}),
+        on="storm_id", how="left",
+    )
     tracks = points[points.storm_id.isin(set(hit.storm_id))].copy()
     if seasons:
         lo, hi = seasons
@@ -190,6 +233,27 @@ def build(args) -> int:
              float(row.exact_lon), float(row.exact_lat))
         )
 
+    # Storms to label, and where. Cat 5 at landfall is derived; NOTABLE is
+    # editorial. A storm in both keeps its curated display name.
+    cat5 = hit[hit.exact_wind_kt >= 137]
+    label_ids = set(cat5.storm_id) | set(NOTABLE)
+    labels_by_season: dict[int, list] = {}
+    for storm_id in label_ids:
+        rows = hit[hit.storm_id == storm_id]
+        if rows.empty:
+            continue
+        # Anchor the label at the storm's STRONGEST U.S. landfall.
+        anchor = rows.loc[rows.exact_wind_kt.idxmax()]
+        season = int(season_of.get(storm_id, 0))
+        if storm_id in NOTABLE:
+            text, dx, dy = NOTABLE[storm_id]
+        else:
+            storm_name = str(anchor["storm_name"]).title()
+            text, dx, dy = f"{storm_name} {season}", 6.0, 2.6
+        labels_by_season.setdefault(season, []).append(
+            (text, float(anchor.exact_lon), float(anchor.exact_lat), dx, dy)
+        )
+
     vmax = float(np.nanmax([np.nanmax(s["wind"]) for v in by_season.values() for s in v]))
     norm = Normalize(vmin=20, vmax=vmax)
 
@@ -226,6 +290,22 @@ def build(args) -> int:
         for key, (marker, _label) in TYPE_MARKER.items()
     }
     impact_xy = {key: ([], []) for key in TYPE_MARKER}
+
+    # One text + leader line per labelled storm, created hidden and revealed as
+    # that storm's season retires, so a label never appears before its storm.
+    label_artists: dict[int, list] = {}
+    for season, entries in labels_by_season.items():
+        for text, lon_a, lat_a, dx, dy in entries:
+            leader, = ax.plot([lon_a, lon_a + dx], [lat_a, lat_a + dy],
+                              color=IMPACT_EDGE, linewidth=0.7, alpha=0.0, zorder=7)
+            anchor_dot, = ax.plot([lon_a], [lat_a], marker="o", markersize=3.2,
+                                  color=INK, alpha=0.0, zorder=8)
+            txt = ax.text(lon_a + dx, lat_a + dy, text, fontsize=8.2,
+                          color=INK, alpha=0.0, zorder=8,
+                          ha="left" if dx > 0 else "right",
+                          va="bottom" if dy > 0 else "top",
+                          fontweight="bold")
+            label_artists.setdefault(season, []).append((leader, anchor_dot, txt))
     heads = {
         key: ax.plot([], [], marker=marker, linestyle="none", markersize=7,
                      markerfacecolor="#fff2cc", markeredgecolor="#7d0f2b",
@@ -258,8 +338,10 @@ def build(args) -> int:
         ncols=2, bbox_to_anchor=(0.008, 0.008),
     )
     # Sits clear above the two-row legend block, which reaches about y=0.12.
-    ax.text(0.008, 0.163, "faded icons mark where past storms came ashore",
+    ax.text(0.008, 0.185, "faded icons mark where past storms came ashore",
             transform=ax.transAxes, fontsize=8.5, color=IMPACT_FACE, alpha=0.8)
+    ax.text(0.008, 0.152, "labelled: Cat 5 at landfall, and storms of note",
+            transform=ax.transAxes, fontsize=8.5, color=INK, alpha=0.75)
     fig.text(0.012, 0.022,
              "HUTrackDB — storms with a continental U.S. landfall, "
              "NOAA HURDAT2 1851-2025",
@@ -317,6 +399,15 @@ def build(args) -> int:
         for key, marker in heads.items():
             marker.set_data(head_xy[key][0], head_xy[key][1])
 
+        # Reveal this season's labels once its tracks are fully drawn. Doing it
+        # at season RETIREMENT would leave the final season unlabelled, since
+        # nothing retires after it.
+        if step == steps - 1:
+            for leader, dot, txt in label_artists.get(season, []):
+                leader.set_alpha(0.55)
+                dot.set_alpha(0.9)
+                txt.set_alpha(0.92)
+
         title.set_text(f"{season}")
         # Counts STORMS, not crossings. by_season holds one entry per storm, and
         # only storms with a continental U.S. landfall are loaded at all, so
@@ -329,7 +420,10 @@ def build(args) -> int:
             f"this season   ·   {cumulative['storms'] + len(storms):,} storms with a "
             f"U.S. landfall since {seasons[0]}"
         )
-        return [trail, active, title, subtitle, *heads.values(), *impacts.values()]
+        drawn = [trail, active, title, subtitle, *heads.values(), *impacts.values()]
+        for group in label_artists.values():
+            drawn.extend(a for triple in [group] for a in sum(triple, ()))
+        return drawn
 
     out = Path(args.out) if args.out else ROOT / "data" / "processed" / "landfalling_storms.gif"
     out.parent.mkdir(parents=True, exist_ok=True)
