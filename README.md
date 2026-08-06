@@ -297,7 +297,7 @@ data/raw/                     HURDAT2, coastline, reference list (not in git)
 data/processed/parquet/       built tables — COMMITTED, ~5 MB
 data/reference/               small committed basemap for the notebook's map
 notebooks/
-  eda_validation.ipynb        EDA + 26 validation checks, executed with outputs
+  eda_validation.ipynb        EDA + 28 validation checks, executed with outputs
 src/hutrackdb/
   constants.py                sourced constants, each with its citation
   config.py                   config loading + calibration enforcement
@@ -311,6 +311,10 @@ src/hutrackdb/
   db/snowflake.py             Snowflake DDL generation
   qa/reference.py             All U.S. Hurricanes list parser
   qa/validate.py              comparison engine
+scripts/
+  fetch_sources.py            download + checksum the default sources
+  make_basemap.py             refresh the notebook's display basemap
+  animate_landfalls.py        animated map of every landfalling storm (for fun)
 docs/                         methodology, fields, gates, coastline
 tests/                        parser, geometry, and detection tests
 ```
