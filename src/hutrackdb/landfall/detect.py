@@ -48,6 +48,7 @@ from dataclasses import dataclass
 import numpy as np
 import shapely
 from shapely.geometry import LineString, Point
+from shapely.ops import nearest_points
 from shapely.strtree import STRtree
 
 from ..constants import (
@@ -125,6 +126,12 @@ class LandfallEvent:
     #: Identity of the connected landmass struck. Backs the landfall-vs-re-entry
     #: test and the mainland determination.
     landmass_id: int | None = None
+    #: Geodesic distance from the landfall position to the admin unit it was
+    #: attributed to. Zero when the position lies inside that unit.
+    landfall_admin_distance_km: float | None = None
+    #: True when the attribution was by containment rather than by nearest
+    #: neighbour -- i.e. the position actually falls inside the named unit.
+    is_attribution_exact: bool = True
 
 
 class LandfallDetector:
@@ -237,14 +244,33 @@ class LandfallDetector:
         result = {
             "admin1": None, "country": None, "iso": None,
             "is_mainland": False, "landmass_area_km2": None, "landmass_id": None,
+            "admin_distance_km": None,
         }
         admin_index = self._admin_tree.query_nearest(point, all_matches=False)
         admin_index = np.atleast_1d(admin_index)
         if admin_index.size:
-            row = self._admin.iloc[int(admin_index[0])]
+            index = int(admin_index[0])
+            row = self._admin.iloc[index]
             result["admin1"] = row.get("admin1_name")
             result["country"] = row.get("country_name")
             result["iso"] = row.get("iso_country")
+
+            # How far the attributed unit actually is. Zero when the position
+            # falls inside the polygon -- the normal case, and always true for a
+            # geometric crossing, which sits on the boundary by construction.
+            # Non-zero means the attribution is a nearest-neighbour fallback:
+            # HURDAT2 placed a landfall where this coastline has no land, so the
+            # label is a best guess whose reliability the distance quantifies.
+            # Recorded rather than thresholded, so no cutoff has to be invented
+            # and downstream can apply its own. See docs/FIELD_DEFINITIONS.md.
+            geometry = self._admin.geometry.iloc[index]
+            if geometry.contains(point):
+                result["admin_distance_km"] = 0.0
+            else:
+                on_admin, _ = nearest_points(geometry, point)
+                result["admin_distance_km"] = geodesic_distance_km(
+                    lon, lat, float(on_admin.x), float(on_admin.y)
+                )
 
         landmass_index = self._landmass_tree.query_nearest(point, all_matches=False)
         landmass_index = np.atleast_1d(landmass_index)
@@ -454,6 +480,8 @@ class LandfallDetector:
             is_mainland_landfall=place["is_mainland"],
             landmass_area_km2=place["landmass_area_km2"],
             landmass_id=place["landmass_id"],
+            landfall_admin_distance_km=place["admin_distance_km"],
+            is_attribution_exact=(place["admin_distance_km"] == 0.0),
             gate_id=gate["gate_id"],
             gate_region=gate["gate_region"],
             gate_distance_km=gate["gate_distance_km"],

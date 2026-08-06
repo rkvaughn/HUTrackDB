@@ -135,6 +135,8 @@ intensifying storms. See [LANDFALL_METHODOLOGY.md §6](LANDFALL_METHODOLOGY.md).
 | `is_mainland_landfall` | bool | D | Struck the continental landmass. Determined by **connectivity, not an area cutoff** |
 | `landmass_area_km2` | float | D | Actual area of the landmass struck. Emitted continuously so you can apply your own barrier-island rule |
 | `landmass_id` | int | D | Internal identity of the connected landmass. Backs the landfall/re-entry test |
+| `landfall_admin_distance_km` | float | D | Geodesic distance from the landfall position to the admin unit named above. **0 means the position lies inside that unit** — always the case for a geometric crossing, which sits on the boundary by construction. Non-zero means HURDAT2 placed a landfall where the coastline source has no land, so the label is a nearest-neighbour fallback whose reliability this distance quantifies |
+| `is_attribution_exact` | bool | D | `landfall_admin_distance_km = 0`. Structural, not a tuned threshold. Filter on it to keep only attributions made by containment |
 | `status_at_landfall` | text | H2 | HURDAT2 status code at the crossing |
 | `is_tropical_at_landfall` | bool | D | Status is TD/TS/HU/SD/SS |
 

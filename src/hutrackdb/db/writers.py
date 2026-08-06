@@ -211,6 +211,8 @@ CREATE TABLE landfalls (
     is_mainland_landfall       INTEGER,
     landmass_area_km2          REAL,
     landmass_id                INTEGER,
+    landfall_admin_distance_km REAL,
+    is_attribution_exact       INTEGER,
     gate_id                    TEXT REFERENCES landfall_gates(gate_id),
     gate_region                TEXT,
     gate_distance_km           REAL,

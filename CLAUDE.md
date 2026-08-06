@@ -3,6 +3,96 @@
 Guidance for Claude Code when working in this repository.
 
 ---
+# CLAUDE.md — Projects Directory
+
+## Data Integrity — No Fabricated Quantitative Values
+
+**This rule applies to all projects in this directory without exception.**
+
+Claude must never generate, hardcode, invent, or infer any quantitative value — including single numbers, thresholds, arrays, vectors, matrices, classifications, scores, or segments — unless that value satisfies one of the following conditions:
+
+1. **Read directly from a named project data file.** The source file must already exist at the time the code is written. Do not write code that consumes data you have not yet acquired.
+2. **Derived by documented computation from project data files.** The derivation must be traceable (e.g., `df["share"] = df["numerator"] / df["denominator"]`).
+3. **A universally-known physical or mathematical constant** (e.g., unit conversion factors, π). These must not be confused with empirical values.
+4. **A value pre-specified in the project's research plan or CLAUDE.md, explicitly confirmed by the PI.** Such values must be documented with a comment citing their source (e.g., `# pre-specified in Research_Plan §4.2, confirmed by PI`).
+
+### What is prohibited
+
+- Segmenting, classifying, or binning observations before the underlying data is acquired and loaded
+- Hardcoding example or placeholder arrays, DataFrames, or matrices as if they were data-derived
+- Inventing thresholds, cutoffs, weights, or priors without PI confirmation
+- Filling in "representative" or "typical" values from memory or general knowledge
+- Producing any numerical output in prose, tables, or code comments that cannot be traced to the above sources
+
+**Size is irrelevant.** A single invented float is as prohibited as a fabricated 10,000-row matrix.
+
+### Confirmation protocol for necessary calibrations
+
+If a quantitative value is genuinely required and cannot be derived from project data (e.g., a convergence tolerance, a minimum cell-size suppression threshold, a model prior), Claude must:
+
+1. **Stop.** Do not insert the value.
+2. **Explain** what value is needed, where it would appear in the code, and why it cannot be read from or derived from existing project data.
+3. **Propose** a specific value with justification.
+4. **Wait for explicit PI confirmation** before proceeding.
+5. **Document** the confirmed value in code with a comment: `# calibration confirmed by PI [date]: <reason>`.
+
+This confirmation is required even for values that seem obvious or conventional.
+
+---
+
+## Reusable Utilities
+
+Before writing any of the following from scratch in a new project, check
+`~/Projects/utilities/` for a ready-made, documented module:
+
+| Task | Module | Key functions |
+|------|--------|---------------|
+| Download a ZIP or file with skip-if-exists logic | `download_utils.py` | `download_zip`, `download_file` |
+| Fetch ACS data via Census API | `census_api.py` | `fetch_acs_tracts`, `fetch_acs_batch`, `build_geoid`, `mask_sentinel` |
+| Build ZCTA→tract, county→tract, or precinct→tract crosswalks | `geo_crosswalk.py` | `build_zip_tract`, `build_county_tract`, `build_prec_tract`, `check_weights` |
+| Paginate GeoJSON from an ArcGIS REST endpoint | `arcgis_rest.py` | `paginate_geojson`, `save_geojson` |
+
+### How to use in a new project
+
+Copy the module(s) you need into the project's `scripts/` directory (or a
+`utils/` subdirectory) and import normally. Do not install from PyPI — these
+are local single-file utilities.
+
+```bash
+cp ~/Projects/utilities/census_api.py my_project/scripts/
+cp ~/Projects/utilities/geo_crosswalk.py my_project/scripts/
+cp ~/Projects/utilities/download_utils.py my_project/scripts/   # required by geo_crosswalk
+```
+
+After copying, update the project's `CLAUDE.md` status table and note which
+utility version was copied and when.
+
+### When to update a utility
+
+If you need to extend a utility for a new project (e.g., add a new crosswalk
+type or support a new ACS geography), update the canonical version in
+`~/Projects/utilities/` and push to GitHub. Then copy the updated version into
+the project. Do not maintain project-local forks that diverge silently.
+
+### GitHub repo
+
+Utilities are published at: https://github.com/rkvaughn/python-geo-utils
+
+---
+
+## Prompt Log Convention
+
+Each project maintains a `PROMPT_LOG.md` at its root with a timestamped record of all
+user prompts and Claude outputs. When starting or ending a session, update the project's
+`PROMPT_LOG.md`. Format:
+
+```markdown
+## YYYY-MM-DD — Session title
+
+**Prompt:** [verbatim or close summary of user prompt]
+**Output:** [summary of what was done: files created/modified, key results, commits]
+```
+
 
 ## RULE 1 — No hardcoded numeric value without explicit signoff
 
