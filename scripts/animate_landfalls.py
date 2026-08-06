@@ -440,54 +440,64 @@ def build(args) -> int:
     print(f"{len(tracks.storm_id.unique())} storms over {len(seasons)} seasons")
     print(f"rendering {frames} frames at {args.width}px -> {out.name}")
 
-    anim = animation.FuncAnimation(fig, render, frames=frames, blit=False)
-    writer = "pillow" if out.suffix.lower() == ".gif" else "ffmpeg"
-    anim.save(out, writer=writer, fps=args.fps,
-              savefig_kwargs={"facecolor": OCEAN})
+    if out.suffix.lower() == ".gif":
+        write_gif(fig, render, frames, out, args.fps, args.colors or 256)
+    else:
+        anim = animation.FuncAnimation(fig, render, frames=frames, blit=False)
+        anim.save(out, writer="ffmpeg", fps=args.fps,
+                  savefig_kwargs={"facecolor": OCEAN})
     plt.close(fig)
-
-    if out.suffix.lower() == ".gif" and args.colors:
-        before = out.stat().st_size
-        shrink_gif(out, args.colors, args.fps)
-        after = out.stat().st_size
-        print(f"palette pass: {before / 1e6:.1f} MB -> {after / 1e6:.1f} MB "
-              f"({args.colors} colours)")
 
     print(f"wrote {out}  ({out.stat().st_size / 1e6:.1f} MB)")
     return 0
 
 
-def shrink_gif(path: Path, colors: int, fps: int) -> None:
-    """Re-map every frame onto ONE shared palette.
+def write_gif(fig, render, n_frames, path: Path, fps: int, colors: int) -> None:
+    """Render straight to a GIF under ONE palette.
 
-    matplotlib's writer quantises each frame independently, which both inflates
-    the file and makes flat areas shimmer as the palette shifts frame to frame.
-    Deriving a single palette from the final frame -- the richest, since the
-    trail and impact icons have fully accumulated -- fixes both.
+    Deliberately does not go through matplotlib's pillow writer. That writer
+    quantises every frame INDEPENDENTLY, which shifts colours slightly from
+    frame to frame -- visible as the colour-bar and other static furniture
+    shimmering as the animation plays. Re-mapping afterwards cannot undo it,
+    because by then each frame's RGB has already been altered.
+
+    Two passes: sample frames to derive one palette, then render again and map
+    every frame onto it. Frames are quantised as they are produced and held as
+    8-bit paletted images rather than RGB, which keeps peak memory reasonable
+    on a long run.
     """
-    from PIL import Image, ImageSequence
+    from PIL import Image
 
-    with Image.open(path) as src:
-        frames = [f.convert("RGB") for f in ImageSequence.Iterator(src)]
+    def grab() -> "Image.Image":
+        fig.canvas.draw()
+        return Image.fromarray(
+            np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy())
 
-    # Derive the palette from frames sampled ACROSS the run, not from the last
-    # one alone. Median-cut allocates by pixel count, and the final frame is
-    # nearly all blue trail and cream impact icons -- so the heat ramp's orange
-    # and red midtones were being quantised away, turning the colourbar grey.
-    # Mid-run frames carry large areas of bright active track and pull those
-    # hues back into the palette.
-    sample_idx = sorted({0, len(frames) // 4, len(frames) // 2,
-                         3 * len(frames) // 4, len(frames) - 1})
-    montage = Image.new("RGB", (frames[0].width, frames[0].height * len(sample_idx)))
-    for row, i in enumerate(sample_idx):
-        montage.paste(frames[i], (0, row * frames[0].height))
+    # Pass 1 -- palette from frames spread across the run. Sampling only the
+    # last frame would under-represent the wind ramp, since by then the map is
+    # mostly trail and impact icons, and the colour bar would band.
+    sample_idx = sorted({0, n_frames // 4, n_frames // 2,
+                         3 * n_frames // 4, n_frames - 1})
+    samples = []
+    for i in sample_idx:
+        render(i)
+        samples.append(grab())
+    montage = Image.new("RGB", (samples[0].width, samples[0].height * len(samples)))
+    for row, img in enumerate(samples):
+        montage.paste(img, (0, row * samples[0].height))
     palette = montage.quantize(colors=colors, method=Image.MEDIANCUT)
-    # No dithering: it speckles flat areas, which defeats run-length encoding
-    # and measurably inflates the file. The only visible cost is mild banding
-    # on the colourbar gradient.
-    mapped = [f.quantize(palette=palette, dither=Image.NONE) for f in frames]
+
+    # Pass 2 -- every frame onto that one palette. No dithering: it speckles
+    # flat areas and defeats run-length encoding for no visible gain here.
+    mapped = []
+    for i in range(n_frames):
+        render(i)
+        mapped.append(grab().quantize(palette=palette, dither=Image.NONE))
+
     mapped[0].save(path, save_all=True, append_images=mapped[1:],
                    duration=int(1000 / fps), loop=0, optimize=True, disposal=1)
+
+
 
 
 def main() -> int:
