@@ -166,6 +166,16 @@ list, where 2025 reads "None".
 Before labelling any output "hurricane", confirm an intensity filter is actually
 applied. When in doubt, say "tropical cyclone" or split the series by intensity.
 
+**The notebook now breaks every figure out by event class** — Cat 1+ hurricane,
+tropical storm, depression, extratropical/other — which is the durable fix for
+this failure mode: a split series cannot be mislabelled the way an aggregate
+can. Classification is **status first, then intensity**, because `ss_category`
+in the database classifies by wind ALONE and therefore reports an extratropical
+cyclone at 70 kt as "Cat 1". Twelve U.S. landfalls are ≥ 64 kt while
+extratropical, Sandy (2012) among them. Keep new figures consistent with that
+scheme, and note that "tropical cyclone" excludes the extratropical class — if a
+chart includes it, the title has to widen accordingly.
+
 ---
 
 ## Semantics that are easy to get wrong
