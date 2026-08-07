@@ -24,8 +24,24 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4"]
+# The base install covers the pipeline and QA only. Everything below is listed
+# explicitly rather than by self-reference, so `pip install -e ".[all]"` works
+# on any pip version a newcomer is likely to have.
+dev = ["pytest>=7.4", "pyflakes>=3.0"]
+notebook = [
+    "jupyterlab>=4.0",
+    "matplotlib>=3.8",      # brings Pillow, which the animation also needs
+    "nbconvert>=7.0",
+    "nbformat>=5.9",
+    "ipykernel>=6.25",
+]
+viz = ["matplotlib>=3.8"]
 snowflake = ["snowflake-connector-python>=3.6"]
+all = [
+    "pytest>=7.4", "pyflakes>=3.0",
+    "jupyterlab>=4.0", "matplotlib>=3.8", "nbconvert>=7.0",
+    "nbformat>=5.9", "ipykernel>=6.25",
+]
 
 [project.scripts]
 hutrackdb = "hutrackdb.cli:main"

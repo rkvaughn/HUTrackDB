@@ -20,6 +20,19 @@ from the committed tables by [`scripts/animate_landfalls.py`](scripts/animate_la
 
 ---
 
+## ▶ New here? Start with the step-by-step guide
+
+**[docs/HOW_TO_RUN.md](docs/HOW_TO_RUN.md) — How to download and run this
+project.** A linear walkthrough that assumes no prior experience with Python
+mapping libraries or hurricane data. Twelve numbered steps, each with the exact
+command, how long it takes, and what success looks like. Every step was run on a
+clean machine from a fresh clone before it was written.
+
+The quick start below is the condensed version for those already comfortable
+with Python.
+
+---
+
 ## What's in the current build
 
 | | |
@@ -44,7 +57,7 @@ The built **Parquet tables ship with this repository** (~5 MB), so you can query
 the database immediately — no download, no build step:
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -e .
+python -m venv .venv && source .venv/bin/activate && pip install -e ".[all]"
 ```
 
 ```python
@@ -325,7 +338,9 @@ scripts/
   animate_landfalls.py        animated map of every landfalling storm (for fun)
 docs/assets/
   landfalling_storms.gif      README animation; regenerate with --preset share
-docs/                         methodology, fields, gates, coastline
+docs/
+  HOW_TO_RUN.md               step-by-step setup and rebuild guide
+  ...                         methodology, fields, gates, coastline
 tests/                        parser, geometry, and detection tests
 ```
 
