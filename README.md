@@ -351,8 +351,27 @@ figure has four panels:
 - **C:** the share of storms forming in the Gulf, by peak lifetime strength.
 - **D:** U.S. landfall of Gulf-born storms, by ENSO state.
 
-The script also writes a standalone figure: the share of storms forming in the
-Gulf against continuous RONI, with a logistic fit.
+A follow-up script looks only at Gulf-born storms:
+
+```bash
+python scripts/gulf_followup_analysis.py   # -> docs/assets/gulf_followup.png
+```
+
+It shows four things:
+
+- **E:** where each storm formed, coloured by ENSO state at genesis.
+- **F:** the U.S. landfall share by the country of the nearest coast and ENSO
+  state.
+- **G:** the RONI odds ratio for U.S. landfall, first unadjusted, then adjusted
+  for peak strength, then also for nearest-coast country. This separates the
+  effect of intensity from the effect of where a storm starts.
+- **H:** Gulf genesis in each 3-month window as a share of that year's
+  Atlantic storms, by the ENSO state of the window.
+
+![Gulf-born storms: where they form, why they land, and when](docs/assets/gulf_followup.png)
+
+The first script also writes a standalone figure: the share of storms forming
+in the Gulf against continuous RONI, with a logistic fit.
 
 ![Share of Atlantic storms forming in the Gulf vs. RONI](docs/assets/gulf_genesis_vs_roni.png)
 
@@ -406,10 +425,12 @@ scripts/
   make_basemap.py             refresh the notebook's display basemap
   animate_landfalls.py        animated map of every landfalling storm (for fun)
   enso_gulf_analysis.py       Gulf genesis / U.S. landfall vs ENSO and strength
+  gulf_followup_analysis.py   Gulf-born storms: location, track vs intensity, season
 docs/assets/
   landfalling_storms.gif      README animation; regenerate with --preset share
   enso_gulf_landfall.png      four-panel ENSO figure (enso_gulf_analysis.py)
   gulf_genesis_vs_roni.png    standalone Gulf share vs RONI (same script)
+  gulf_followup.png           Gulf-born follow-ups (gulf_followup_analysis.py)
 docs/
   HOW_TO_RUN.md               step-by-step setup and rebuild guide
   ...                         methodology, fields, gates, coastline

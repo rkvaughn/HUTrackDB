@@ -110,3 +110,21 @@ def test_poisson_matches_closed_form_rate_ratio():
     fit = fit_poisson(y, np.column_stack([np.ones_like(x), x]), ["fe", "x"])
     slope, _ = fit.term("x")
     assert np.exp(slope) == pytest.approx(y[x == 1].mean() / y[x == 0].mean())
+
+
+def test_multi_logit_reduces_to_closed_form():
+    from hutrackdb.stats import fit_logit
+    x = np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=float)
+    y = np.array([1, 0, 0, 0, 1, 1, 1, 0], dtype=float)
+    fit = fit_logit(y, np.column_stack([np.ones_like(x), x]), ["const", "x"])
+    logit = lambda p: np.log(p / (1 - p))  # noqa: E731
+    slope, _ = fit.term("x")
+    assert slope == pytest.approx(logit(y[x == 1].mean()) - logit(y[x == 0].mean()))
+
+
+def test_separated_logit_raises():
+    from hutrackdb.stats import fit_logit
+    x = np.array([0, 0, 1, 1], dtype=float)
+    y = np.array([0, 0, 1, 1], dtype=float)
+    with pytest.raises(RuntimeError):
+        fit_logit(y, np.column_stack([np.ones_like(x), x]), ["const", "x"])

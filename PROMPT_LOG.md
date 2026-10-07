@@ -51,3 +51,19 @@ after rebuilds.
 **Output:** scripts/enso_gulf_analysis.py now writes the four-panel figure to
 docs/assets/enso_gulf_landfall.png (committed) by default; README embeds it;
 CLAUDE.md lists both analysis PNGs as build-derived binaries.
+
+**Follow-up prompt:** Split Gulf-born storms by where in the Gulf they form;
+test landfall vs RONI controlling for peak strength; plot Gulf genesis as a
+share of the year's storms by 3-month window and ENSO state.
+
+**Output:** scripts/gulf_followup_analysis.py -> docs/assets/gulf_followup.png.
+PI decisions: location = nearest-coast country (same nearest-polygon rule as
+landfall attribution); strength = peak tropical wind, linear; window share =
+Gulf geneses in window / all Atlantic storms that year, averaged over years per
+CPC state. Results: El Nino Gulf-born storms form nearer the U.S. coast more
+often (44% vs 31% otherwise, Fisher p = 0.14); U.S.-coast storms land 72-92%
+of the time vs 39-68% for Mexico-coast. RONI landfall odds ratio 1.44 (RONI
+only) -> 1.49 (+ peak wind) -> 1.27 (+ coast country, p = 0.36): location, not
+intensity, explains part of the El Nino landfall bump. stats.py: GLM fitters
+now share a tolerance-free Newton routine (stop when log-likelihood stops
+rising; explicit separation detection) with tests.

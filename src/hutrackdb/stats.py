@@ -61,33 +61,65 @@ class LogisticFit:
         return 2 * (1 - NormalDist().cdf(z))
 
 
-def fit_logistic(x: np.ndarray, y: np.ndarray) -> LogisticFit:
-    """Maximum-likelihood logit P(y=1) = expit(a + b x) by Newton-Raphson.
+def _newton(design: np.ndarray, y: np.ndarray, family: str,
+            beta: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Newton-Raphson for a canonical-link GLM ("logit" or "poisson").
 
-    Iterates until the parameter vector stops changing to machine precision,
-    so there is no tolerance to choose. Raises if it does not settle, which
-    happens only under complete separation.
+    Stops when a step no longer increases the log-likelihood -- the point at
+    which floating point, not the model, limits progress. That rule has no
+    tolerance to choose. Raises under complete separation, detected as fitted
+    means saturating at their bounds.
+
+    Returns (coefficients, covariance = inverse Fisher information).
     """
+    def stats(b):
+        eta = design @ b
+        if family == "logit":
+            mean = 1 / (1 + np.exp(-eta))
+            weight = mean * (1 - mean)
+            loglik = float(np.sum(y * eta - np.logaddexp(0, eta)))
+        else:
+            mean = np.exp(eta)
+            weight = mean
+            loglik = float(np.sum(y * eta - mean))
+        return mean, weight, loglik
+
+    mean, weight, loglik = stats(beta)
+    while True:
+        hessian = design.T @ (design * weight[:, None])
+        try:
+            candidate = beta + np.linalg.solve(hessian, design.T @ (y - mean))
+        except np.linalg.LinAlgError:
+            raise RuntimeError(f"{family} fit is separated or collinear: the "
+                               f"information matrix became singular") from None
+        c_mean, c_weight, c_loglik = stats(candidate)
+        if not c_loglik > loglik:
+            break
+        beta, mean, weight, loglik = candidate, c_mean, c_weight, c_loglik
+    # Separation drives estimates toward infinity until floating point
+    # saturates the fitted means at their bounds; that, not an iteration
+    # count, is the signal.
+    eta = design @ beta
+    if family == "logit" and np.all((eta > 0) == (y == 1)) and np.all(eta != 0):
+        # A finite linear predictor that classifies every observation
+        # correctly is the definition of separation: no finite MLE exists.
+        raise RuntimeError("logit fit is separated: the covariates perfectly "
+                           "predict the outcome, so estimates are infinite")
+    if np.any(weight == 0):
+        raise RuntimeError(f"{family} fit is separated: some fitted means hit "
+                           f"their bound, so estimates are infinite")
+    covariance = np.linalg.inv(design.T @ (design * weight[:, None]))
+    return beta, covariance
+
+
+def fit_logistic(x: np.ndarray, y: np.ndarray) -> LogisticFit:
+    """Maximum-likelihood logit P(y=1) = expit(a + b x). See :func:`_newton`."""
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     design = np.column_stack([np.ones_like(x), x])
-    beta = np.zeros(2)
-    for _ in range(len(x)):
-        prob = 1 / (1 + np.exp(-(design @ beta)))
-        weight = prob * (1 - prob)
-        hessian = design.T @ (design * weight[:, None])
-        step = np.linalg.solve(hessian, design.T @ (y - prob))
-        new = beta + step
-        if np.array_equal(new, beta) or np.allclose(new, beta, rtol=np.finfo(float).eps, atol=0):
-            break
-        beta = new
-    else:
-        raise RuntimeError("logistic fit did not converge (separated data?)")
-    prob = 1 / (1 + np.exp(-(design @ beta)))
-    hessian = design.T @ (design * (prob * (1 - prob))[:, None])
+    beta, covariance = _newton(design, y, "logit", np.zeros(2))
     return LogisticFit(intercept=float(beta[0]), slope=float(beta[1]),
-                       covariance=np.linalg.inv(hessian),
-                       n=len(x), events=int(y.sum()))
+                       covariance=covariance, n=len(x), events=int(y.sum()))
 
 
 @dataclass(frozen=True)
@@ -106,8 +138,7 @@ def fit_poisson(y: np.ndarray, design: np.ndarray, names: list[str]) -> PoissonF
     """Maximum-likelihood Poisson log-linear model by Newton-Raphson.
 
     ``design`` must already carry whatever intercept / fixed-effect columns
-    the model needs. Same stopping rule as :func:`fit_logistic`: iterate
-    until the parameters stop changing to machine precision.
+    the model needs. Stopping rule: see :func:`_newton`.
     """
     y = np.asarray(y, dtype=float)
     design = np.asarray(design, dtype=float)
@@ -118,20 +149,22 @@ def fit_poisson(y: np.ndarray, design: np.ndarray, names: list[str]) -> PoissonF
         column = design[:, j]
         if set(np.unique(column)) <= {0.0, 1.0} and y[column == 1].sum() > 0:
             beta[j] = np.log(y[column == 1].mean())
-    for _ in range(len(y)):
-        mu = np.exp(design @ beta)
-        hessian = design.T @ (design * mu[:, None])
-        new = beta + np.linalg.solve(hessian, design.T @ (y - mu))
-        if np.allclose(new, beta, rtol=np.finfo(float).eps, atol=0):
-            beta = new
-            break
-        beta = new
-    else:
-        raise RuntimeError("Poisson fit did not converge")
-    mu = np.exp(design @ beta)
-    covariance = np.linalg.inv(design.T @ (design * mu[:, None]))
+    beta, covariance = _newton(design, y, "poisson", beta)
     return PoissonFit(coef=beta, covariance=covariance, names=list(names))
 
 
 def two_sided_p(z: float) -> float:
     return 2 * (1 - NormalDist().cdf(abs(z)))
+
+
+def fit_logit(y: np.ndarray, design: np.ndarray, names: list[str]) -> PoissonFit:
+    """Multi-covariate maximum-likelihood logit by Newton-Raphson.
+
+    ``design`` carries its own intercept column. Returns the same coefficient
+    container as :func:`fit_poisson` (``term(name)`` -> coefficient, SE).
+    Raises under complete separation rather than returning infinite estimates.
+    """
+    y = np.asarray(y, dtype=float)
+    design = np.asarray(design, dtype=float)
+    beta, covariance = _newton(design, y, "logit", np.zeros(design.shape[1]))
+    return PoissonFit(coef=beta, covariance=covariance, names=list(names))
