@@ -37,15 +37,15 @@ with Python.
 
 | | |
 |---|---|
-| Storms | **3,266** (Atlantic 1851–2025, NE/N-Central Pacific 1949–2025) |
-| Track points | **87,631** |
-| Landfalls | **4,260** countable (1,568 US), plus 2,361 overland re-entries |
+| Storms | **3,250** (Atlantic 1851–2025, NE/N-Central Pacific 1949–2025) |
+| Track points | **87,584** |
+| Landfalls | **4,254** countable (1,563 US), plus 2,344 overland re-entries |
 | Landfall gates | **5,007** |
-| Bypass (near-miss) storms | **684** |
+| Bypass (near-miss) storms | **687** |
 | Parse warnings | **0** |
 
 Validated against NOAA's *All U.S. Hurricanes* list: **285 reference CONUS
-landfalls vs 292 detected**, with **105/110 named-era storms matched exactly**
+landfalls vs 294 detected**, with **107/110 named-era storms matched exactly**
 and **zero reference storms undetected**. Every remaining difference is
 classified and explained in the QA report.
 
@@ -98,6 +98,28 @@ Outputs land in `data/processed/`:
 | `hutrackdb.sqlite` | no (27 MB) | Plain relational, with foreign keys and indexes |
 | `snowflake_ddl.sql` | no | Snowflake DDL, GEOGRAPHY views, and COPY INTO template |
 | `qa_report.md` | no | Validation report |
+
+### Keeping it current
+
+NOAA revises HURDAT2 **once a year**, usually between February and May, after
+the National Hurricane Center completes post-season best-track analysis. Each
+revision is published under a new filename, adds the latest season, and may
+also amend earlier ones through reanalysis.
+
+```bash
+python -m hutrackdb refresh --check   # is a newer release out? changes nothing
+```
+
+```bash
+python -m hutrackdb refresh           # adopt it, rebuild, and re-validate
+```
+
+`refresh` finds the current release on the NHC directory, downloads it, records
+its path, URL and freshly-computed checksum in `config/pipeline.yaml`, then
+rebuilds every output, re-runs the QA comparison, re-executes the notebook,
+regenerates the animation above, and checks the counts quoted in this README
+against the new data. It prints a pass/fail line per step. Checking once each
+spring is enough.
 
 Only the Parquet tables are committed. They carry the full content — every
 table is GeoParquet, so `gpd.read_parquet` returns geometry ready to plot. The
@@ -163,9 +185,9 @@ demoted by the geometric tests. Every landfall records its provenance:
 
 | `detection_method` | Count | Meaning |
 |---|---:|---|
-| `native_confirmed` | 1,253 | `L`-flagged and independently reproduced geometrically |
-| `native` | 57 | `L`-flagged; geometry did not reproduce it |
-| `inferred` | 2,950 | Found geometrically; no native flag |
+| `native_confirmed` | 1,291 | `L`-flagged and independently reproduced geometrically |
+| `native` | 58 | `L`-flagged; geometry did not reproduce it |
+| `inferred` | 2,905 | Found geometrically; no native flag |
 
 Full methodology, worked examples, and limitations:
 **[docs/LANDFALL_METHODOLOGY.md](docs/LANDFALL_METHODOLOGY.md)**.
@@ -180,7 +202,7 @@ canonical:
   crossing
 - `sixhr_*` — the nearest synoptic fix at or before the landfall
 
-**1,768 landfalls have different winds at the two times.** Michael (2018):
+**1,766 landfalls have different winds at the two times.** Michael (2018):
 125 kt at the 12:00 UTC fix, **140 kt** at the 17:25 landfall — a full
 Saffir-Simpson category apart.
 
@@ -298,8 +320,8 @@ own notes.
 
 Discrepancies are **classified, not suppressed**:
 
-- **5** reference storms detected as landfalls but **below 64 kt at the
-  crossing** (Fern 60, Ginger 60, Agnes 57, Belle 63, Bob 62 kt) — the
+- **3** reference storms detected as landfalls but **below 64 kt at the
+  crossing** (Ginger 55, Belle 63, Bob 62 kt) — the
   reference records peak coastal wind, not wind at the crossing. Not misses.
 - **5** detections the reference excludes by its own `*` annotation (Alma,
   Diana, Irene, Sandy, Matthew) — HURDAT2 flags a landfall where the reference
@@ -307,6 +329,41 @@ Discrepancies are **classified, not suppressed**:
   products; the pipeline follows HURDAT2.
 - **2** unexplained (Gerda 1969, Nicole 2022).
 - **0** reference storms with no detected landfall at all.
+
+---
+
+## Analysis: ENSO, Gulf genesis and U.S. landfall
+
+```bash
+python scripts/enso_gulf_analysis.py   # figure + tables -> data/processed/analysis/
+```
+
+For Atlantic storms in the seasons the RONI record covers (1950 onward), the
+figure has four panels:
+
+- **A:** the share of storms forming in the Gulf, by ENSO state.
+- **B:** how often storms form as RONI varies, for the Gulf and for the whole
+  basin. Monthly genesis counts are modelled with a Poisson regression that has
+  a fixed effect for each calendar month, so the two slopes compare directly. A
+  Wald test checks the Gulf slope against the rest of the basin.
+- **C:** the share of storms forming in the Gulf, by peak lifetime strength.
+- **D:** U.S. landfall of Gulf-born storms, by ENSO state.
+
+Definitions (PI decisions 2026-10-07):
+
+- **Genesis** is the first track point with tropical or subtropical status.
+- **The Gulf** is the Natural Earth *Gulf of Mexico* plus *Bahía de Campeche*
+  marine polygons.
+- **ENSO state** is CPC's published RONI episode label for the 3-month season
+  centred on the genesis month.
+- **Strength** is the peak wind while the storm is tropical.
+
+ENSO state comes from **CPC's own table**, not a re-derivation. The documented
+rule (see `constants.py`) runs as a cross-check: it reproduces the table for
+908 of 912 seasons and differs only on a 1984 rounding tie. All intervals use
+the confirmed `confidence_level` calibration. These are associations, not
+causal estimates. The script also reads the Parquet tables, so it needs no
+rebuild.
 
 ---
 
@@ -322,6 +379,8 @@ notebooks/
 src/hutrackdb/
   constants.py                sourced constants, each with its citation
   config.py                   config loading + calibration enforcement
+  sources.py                  the one source registry; NHC release discovery
+  refresh.py                  adopt a new HURDAT2 release, rebuild, re-validate
   parse/hurdat2.py            fixed-format parser
   geo/coastline.py            swappable coastline source
   geo/gates.py                swappable gate system
@@ -332,10 +391,14 @@ src/hutrackdb/
   db/snowflake.py             Snowflake DDL generation
   qa/reference.py             All U.S. Hurricanes list parser
   qa/validate.py              comparison engine
+  enso.py                     RONI loading; CPC episode table + rule cross-check
+  stats.py                    Wilson intervals, logistic fit (numpy only)
 scripts/
-  fetch_sources.py            download + checksum the default sources
+  fetch_sources.py            download + checksum the sources named in config
+  check_doc_counts.py         verify counts quoted in prose match the build
   make_basemap.py             refresh the notebook's display basemap
   animate_landfalls.py        animated map of every landfalling storm (for fun)
+  enso_gulf_analysis.py       Gulf genesis / U.S. landfall vs ENSO and strength
 docs/assets/
   landfalling_storms.gif      README animation; regenerate with --preset share
 docs/
@@ -350,15 +413,20 @@ tests/                        parser, geometry, and detection tests
 
 | Source | Retrieved |
 |---|---|
-| [HURDAT2 Atlantic 1851–2025](https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt) | 2026-08-05 |
-| [HURDAT2 NE/N-Central Pacific 1949–2025](https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt) | 2026-08-05 |
+| [HURDAT2 Atlantic 1851–2025](https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-092326.txt) (revised 2026-09-23) | 2026-10-07 |
+| [HURDAT2 NE/N-Central Pacific 1949–2025](https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-092926.txt) (revised 2026-09-29) | 2026-10-07 |
 | [HURDAT2 format specification](https://www.aoml.noaa.gov/hrd/hurdat/hurdat2-format.pdf) (Landsea, April 2022) | 2026-08-05 |
 | [All U.S. Hurricanes](https://www.aoml.noaa.gov/hrd/hurdat/All_U.S._Hurricanes.html) | 2026-08-05 |
 | [Saffir-Simpson Hurricane Wind Scale](https://www.nhc.noaa.gov/aboutsshws.php) | 2026-08-05 |
 | [Natural Earth 1:10m Admin-1](https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip) | 2026-08-05 |
+| [NOAA CPC RONI](https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt) and [episode table](https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/) (analysis only) | 2026-10-07 |
+| [NWS Public Information Statement 26-05](https://www.weather.gov/media/notification/pdf_2026/pns26-05_Relative_ONI.pdf) (RONI adoption, ENSO definition) | 2026-10-07 |
+| [Natural Earth 1:10m marine polygons](https://naciscdn.org/naturalearth/10m/physical/ne_10m_geography_marine_polys.zip) (analysis only) | 2026-10-07 |
 
-SHA-256 checksums for every source are recorded in `config/pipeline.yaml` and
-written into the `pipeline_metadata` table of each build.
+Every path, URL and SHA-256 above is declared once, in `config/pipeline.yaml`,
+and written into the `pipeline_metadata` table of each build. Nothing in the
+scripts keeps a second copy. The HURDAT2 rows are revised annually — see
+[Keeping it current](#keeping-it-current).
 
 ---
 

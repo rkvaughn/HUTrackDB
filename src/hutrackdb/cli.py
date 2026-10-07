@@ -2,6 +2,8 @@
 
     python -m hutrackdb build          # full pipeline -> all outputs
     python -m hutrackdb qa             # QA against the All U.S. Hurricanes list
+    python -m hutrackdb refresh --check # is a newer HURDAT2 release available?
+    python -m hutrackdb refresh        # adopt the current release and rebuild
     python -m hutrackdb gates --export  # write the default gate set out
     python -m hutrackdb provenance     # print the calibration register
 """
@@ -82,6 +84,18 @@ def command_gates(args) -> int:
     return 0
 
 
+def command_refresh(args) -> int:
+    from .config import Config
+    from .refresh import check, refresh, render_check
+
+    config = Config.load(args.config)
+    if args.check:
+        print(render_check(config, check(config)))
+        return 0
+    return refresh(config, notebook=not args.skip_notebook,
+                   animation=not args.skip_animation)
+
+
 def command_provenance(args) -> int:
     from .config import Config
 
@@ -109,6 +123,25 @@ def main(argv: list[str] | None = None) -> int:
     gates = subparsers.add_parser("gates", help="inspect or export the gate set")
     gates.add_argument("--export", default=None, help="write the gate set to this path")
     gates.set_defaults(func=command_gates)
+
+    refresh = subparsers.add_parser(
+        "refresh",
+        help="adopt the current HURDAT2 release and rebuild",
+        description=(
+            "NOAA revises HURDAT2 once a year, usually February-May, after "
+            "post-season best-track analysis. This finds the current release, "
+            "records it in config/pipeline.yaml, downloads it, and rebuilds."
+        ),
+    )
+    refresh.add_argument(
+        "--check", action="store_true",
+        help="only report whether a newer release exists; change nothing",
+    )
+    refresh.add_argument("--skip-notebook", action="store_true",
+                         help="do not re-execute the validation notebook")
+    refresh.add_argument("--skip-animation", action="store_true",
+                         help="do not regenerate the README animation")
+    refresh.set_defaults(func=command_refresh)
 
     provenance = subparsers.add_parser(
         "provenance", help="print the calibration provenance register"

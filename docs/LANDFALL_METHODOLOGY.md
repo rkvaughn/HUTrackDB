@@ -115,8 +115,8 @@ flagging for that storm's year and region — so a downstream user can
 distinguish *"no landfall occurred"* from *"a landfall may exist but was never
 flagged."*
 
-**Current build:** 1,253 `native_confirmed`, 57 `native`, 2,950 `inferred`
-landfalls, plus 2,361 re-entries.
+**Current build:** 1,291 `native_confirmed`, 58 `native`, 2,905 `inferred`
+landfalls, plus 2,344 re-entries.
 
 ---
 
@@ -198,7 +198,7 @@ refuses to make that choice for you and stores **both**:
 | `hours_from_6hr_to_landfall` | Gap between the two, in hours |
 | `exact_is_offcadence` | Whether the exact record is asynoptic |
 
-Neither is canonical. In the current build **1,768 landfalls have a different
+Neither is canonical. In the current build **1,766 landfalls have a different
 wind at the exact time than at the preceding synoptic fix.**
 
 Michael (2018) is the canonical case: **125 kt** at the 12:00 UTC synoptic fix,

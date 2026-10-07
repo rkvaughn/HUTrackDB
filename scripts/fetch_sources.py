@@ -5,15 +5,20 @@
     python scripts/fetch_sources.py --force    # re-download everything
     python scripts/fetch_sources.py --check    # verify checksums only
 
-HURDAT2 filenames carry their revision date, so NOAA publishes a NEW filename
-each season rather than updating one. ``--discover`` lists what is currently
-available on the NHC directory so the config can be pointed at a newer release.
+Every path, URL and checksum comes from ``config/pipeline.yaml``. This script
+holds no source list of its own, so there is nothing here to keep in step with
+the configuration by hand.
+
+NOAA revises HURDAT2 once a year. You do not need this script to adopt a new
+release -- use ``hutrackdb refresh``, which finds the current release, records
+it, downloads it, and rebuilds. ``hutrackdb refresh --check`` reports whether a
+newer release exists without changing anything.
 
 NOTE ON SUBSTITUTED INPUTS
 --------------------------
 This script fetches the DEFAULT sources. If you have set
 ``coastline.override_path`` in config/pipeline.yaml, the Natural Earth download
-below is not used by the build and you may skip it -- the pipeline reads your
+is not used by the build and is reported as optional -- the pipeline reads your
 file instead. The HURDAT2 files and the All U.S. Hurricanes reference are
 required either way: they are the storm data and the QA baseline, neither of
 which the coastline substitution replaces. See docs/COASTLINE.md.
@@ -22,79 +27,14 @@ which the coastline substitution replaces. See docs/COASTLINE.md.
 from __future__ import annotations
 
 import argparse
-import hashlib
-import re
 import sys
-import urllib.request
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-RAW = ROOT / "data" / "raw"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-#: (destination, url, expected sha256 or None)
-SOURCES = [
-    (
-        RAW / "hurdat2" / "hurdat2-atl-1851-2025-02272026.txt",
-        "https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt",
-        "1b9b0c7beed5b4505838658b1d30e159fc84330c60891a58cfcf43ae55c37202",
-    ),
-    (
-        RAW / "hurdat2" / "hurdat2-nepac-1949-2025-02272026.txt",
-        "https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt",
-        "db65f8bc538d5c05e15f738c96111861d6ce3572c007879de58e44d4d05a9cd6",
-    ),
-    (
-        RAW / "reference" / "all_us_hurricanes.html",
-        "https://www.aoml.noaa.gov/hrd/hurdat/All_U.S._Hurricanes.html",
-        None,  # a live HTML page; content changes when NOAA revises the list
-    ),
-    (
-        RAW / "coastline" / "ne_admin1.zip",
-        "https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip",
-        "efc59726337323058f9446210adc96673179cd344e053666ee3d28cb58ba2b05",
-    ),
-]
-
-NHC_INDEX = "https://www.nhc.noaa.gov/data/hurdat/"
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def download(url: str, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    print(f"  fetching {url}")
-    with urllib.request.urlopen(url, timeout=300) as response:
-        target.write_bytes(response.read())
-    print(f"  -> {target.relative_to(ROOT)} ({target.stat().st_size:,} bytes)")
-
-
-def discover() -> int:
-    """List HURDAT2 releases currently published by NHC."""
-    print(f"Listing {NHC_INDEX}\n")
-    with urllib.request.urlopen(NHC_INDEX, timeout=120) as response:
-        html = response.read().decode("utf-8", errors="replace")
-    files = sorted(set(re.findall(r'href="(hurdat2[^"]+\.txt)"', html)))
-    atlantic = [f for f in files if "nepac" not in f]
-    pacific = [f for f in files if "nepac" in f]
-    print("Atlantic (most recent last):")
-    for name in atlantic[-4:]:
-        print(f"  {NHC_INDEX}{name}")
-    print("\nNE/N-Central Pacific (most recent last):")
-    for name in pacific[-4:]:
-        print(f"  {NHC_INDEX}{name}")
-    print(
-        "\nTo adopt a newer release: update basins.*.path / .url / .sha256 in "
-        "config/pipeline.yaml and the SOURCES table in this script, then re-run "
-        "with --force."
-    )
-    return 0
+from hutrackdb import sources                      # noqa: E402
+from hutrackdb.config import Config                # noqa: E402
 
 
 def main() -> int:
@@ -103,55 +43,79 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="verify checksums only")
     parser.add_argument("--discover", action="store_true",
                         help="list HURDAT2 releases available from NHC")
+    parser.add_argument("--config", default=None, help="path to pipeline.yaml")
     args = parser.parse_args()
 
+    config = Config.load(args.config)
+    root = config.root
+
     if args.discover:
-        return discover()
+        return discover(config)
 
     failures = 0
-    for target, url, expected in SOURCES:
-        print(f"\n{target.name}")
+    for source in sources.registry(config):
+        print(f"\n{source.name}")
+        print(f"  {source.target.relative_to(root)}")
+
         if args.check:
-            if not target.exists():
-                print("  MISSING")
-                failures += 1
+            if not source.target.exists():
+                if source.optional_because:
+                    print(f"  absent, but not needed: {source.optional_because}")
+                else:
+                    print("  MISSING")
+                    failures += 1
                 continue
-        elif args.force or not target.exists():
+        elif args.force or not source.target.exists():
             try:
-                download(url, target)
-            except Exception as exc:
+                print(f"  fetching {source.url}")
+                sources.download(source.url, source.target)
+                print(f"  -> {source.target.stat().st_size:,} bytes")
+            except Exception as exc:                # noqa: BLE001
                 print(f"  FAILED: {exc}")
                 failures += 1
                 continue
         else:
             print("  present (use --force to re-download)")
 
-        if expected:
-            actual = sha256(target)
-            if actual == expected:
+        if source.sha256:
+            actual = sources.sha256_of(source.target)
+            if actual == source.sha256:
                 print(f"  checksum OK ({actual[:16]}...)")
             else:
                 print("  CHECKSUM MISMATCH")
-                print(f"    expected {expected}")
+                print(f"    expected {source.sha256}")
                 print(f"    actual   {actual}")
-                print("    The upstream file has changed. Verify the new content is "
-                      "the release you intend, then update the checksum in "
-                      "config/pipeline.yaml and this script.")
+                print("    The upstream file has changed. If this is HURDAT2, NOAA has")
+                print("    published a revision -- run `hutrackdb refresh` to adopt it")
+                print("    properly rather than editing the checksum by hand.")
                 failures += 1
         else:
-            print(f"  checksum not pinned (live page); current {sha256(target)[:16]}...")
+            digest = sources.sha256_of(source.target)
+            print(f"  checksum not pinned (live page); current {digest[:16]}...")
 
-    # Natural Earth ships zipped; the pipeline reads the extracted shapefile.
-    archive = RAW / "coastline" / "ne_admin1.zip"
-    extracted = RAW / "coastline" / "ne_10m_admin_1_states_provinces"
-    if archive.exists() and (args.force or not extracted.exists()):
-        print(f"\nextracting {archive.name}")
-        with zipfile.ZipFile(archive) as zf:
-            zf.extractall(extracted)
-        print(f"  -> {extracted.relative_to(ROOT)}")
+        if source.extract_to and (args.force or not source.extract_to.exists()):
+            print(f"  extracting -> {source.extract_to.relative_to(root)}")
+            with zipfile.ZipFile(source.target) as archive:
+                archive.extractall(source.extract_to)
 
-    print("\n" + ("FAILURES: %d" % failures if failures else "All sources present and verified."))
+    print("\n" + (f"FAILURES: {failures}" if failures
+                  else "All sources present and verified."))
     return 1 if failures else 0
+
+
+def discover(config: Config) -> int:
+    """List HURDAT2 releases currently published by NHC."""
+    print(f"Listing {sources.NHC_INDEX}\n")
+    for basin in sources.enabled_basins(config):
+        current = sources.configured_url(config, basin)
+        print(f"{basin} (most recent last):")
+        for release in sources.list_releases(basin)[-4:]:
+            marker = "  <- in use" if release.url == current else ""
+            print(f"  {release.describe()}{marker}")
+        print()
+    print("HURDAT2 is revised once a year, usually February-May. To adopt the")
+    print("current release, run:  hutrackdb refresh")
+    return 0
 
 
 if __name__ == "__main__":

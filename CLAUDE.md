@@ -186,7 +186,19 @@ rebuild.
 
 ### Refresh procedure
 
-Run in this order; each step depends on the one before it:
+**When a new HURDAT2 release is the reason, run the one command:**
+
+```bash
+python -m hutrackdb refresh   # adopt release -> build -> qa -> notebook -> gif -> doc counts
+```
+
+It discovers the current release from the NHC listing, downloads it, records
+path/url/retrieved/sha256 in `config/pipeline.yaml`, and then runs every
+downstream step, printing a pass/fail line for each. `--check` reports whether
+a newer release exists and changes nothing. See "Update cadence" below.
+
+**When the reason is a code or config change instead**, run the steps directly,
+in this order; each depends on the one before it:
 
 ```bash
 python -m hutrackdb build     # parquet/ + gpkg + sqlite + DDL + notebook basemap
@@ -204,13 +216,40 @@ python -m hutrackdb qa        # re-validate; read the report, don't just run it
 python -m nbconvert --to notebook --execute --inplace notebooks/eda_validation.ipynb
 ```
 
+```bash
+python scripts/check_doc_counts.py   # do the counts in prose still match?
+```
+
 Then verify before committing:
 
 - `git status` shows the `.parquet` files as modified
 - the QA report still shows agreement with the All U.S. Hurricanes list — a
   large swing in the comparison means the change altered landfall semantics, so
   say so explicitly rather than committing past it
-- the notebook shows **26/26 checks passing** and no execution errors
+- the notebook shows **28/28 checks passing** and no execution errors
+- `check_doc_counts.py` exits clean
+
+### Update cadence
+
+NOAA revises HURDAT2 **once a year, released February–May**, after NHC's
+post-season best-track analysis. Each revision is a new filename; it adds the
+season just past and may amend earlier ones by reanalysis. The two basins are
+not always published on the same day, so each is tracked separately in
+`config/pipeline.yaml` and compared independently.
+
+Determined from the published NHC directory listing (`hutrackdb refresh
+--check` re-derives it live; do not hardcode a schedule anywhere).
+
+**Source definitions live in exactly one place** — the `basins`, `coastline`
+and `qa_reference` blocks of `config/pipeline.yaml`. `hutrackdb/sources.py`
+reads them and `scripts/fetch_sources.py` has no list of its own. Do not
+reintroduce a second copy of a path, URL or checksum.
+
+A pinned checksum proves the file being built from is the file built from
+before; it cannot authenticate a release never seen. So `refresh` **computes**
+the checksum from its download and records it, and every later run enforces it.
+This is the one legitimate way a checksum enters the config — never transcribe
+or invent one.
 
 ### Three things go stale *together* — don't refresh only the Parquet
 
@@ -219,7 +258,12 @@ Then verify before committing:
    stored in the `.ipynb`; if not re-executed they will display numbers that
    contradict the data sitting beside them.
 3. **Build-dependent counts quoted in prose.** These are hardcoded and will not
-   update themselves:
+   update themselves. **`scripts/check_doc_counts.py` catches the headline ones
+   mechanically** — it recomputes each figure from the built Parquet and reports
+   every file that no longer quotes the current value. Run it after any rebuild;
+   `hutrackdb refresh` runs it automatically. The figures it does *not* yet
+   cover — the detection-method split, the QA reference-vs-detected comparison,
+   and the timing-difference count — still need checking by hand:
 
    | File | Figures quoted |
    |---|---|
@@ -236,7 +280,8 @@ Then verify before committing:
    it small, and do not move the large full-resolution render into git alongside
    it.
 
-   `grep -rn "3,266\|87,631\|4,260\|5,007" README.md docs/` finds most of them.
+   `python scripts/check_doc_counts.py` locates the headline ones precisely;
+   `grep -rn "3,266\|87,631\|4,260\|5,007" README.md docs/` finds the rest.
 
 ### Never commit
 

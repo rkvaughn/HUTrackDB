@@ -215,7 +215,12 @@ def run_qa(config, reference_path: str | Path | None = None,
            storms: pd.DataFrame | None = None) -> QAReport:
     """Compare pipeline landfalls against the reference list."""
     if reference_path is None:
-        reference_path = config.root / "data" / "raw" / "reference" / "all_us_hurricanes.html"
+        # Declared in config so the fetch script and the QA layer cannot drift
+        # apart about which file this is; the literal is only a fallback for
+        # configurations written before that block existed.
+        reference_path = config.path("qa_reference.path") or (
+            config.root / "data" / "raw" / "reference" / "all_us_hurricanes.html"
+        )
     reference = parse_reference(reference_path)
 
     if landfalls is None or storms is None:

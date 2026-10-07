@@ -64,6 +64,18 @@ calibration:
       is invisible at any scale the file is drawn at. It affects NO computed
       value -- landfall detection always uses the full-precision coastline.
 
+  confidence_level:
+    value: 0.95
+    status: confirmed
+    confirmed_by: PI
+    confirmed_on: 2026-10-07
+    source: >
+      Coverage of every uncertainty interval drawn by
+      scripts/enso_gulf_analysis.py: Wilson score intervals on proportions and
+      the Wald band on the logistic fit. Conventional level, explicitly
+      approved by the PI on 2026-10-07. Analysis-only; it changes no value in
+      the database.
+
   landfall_segment_step_km:
     value: 1.0
     status: sourced
@@ -123,6 +135,9 @@ coastline:
   source_name: natural_earth_10m_admin_1
   path: data/raw/coastline/ne_10m_admin_1_states_provinces/ne_10m_admin_1_states_provinces.shp
   url: https://naciscdn.org/naturalearth/10m/cultural/ne_10m_admin_1_states_provinces.zip
+  # The download is a zip; the pipeline reads the shapefile extracted from it
+  # into `path`'s parent directory. scripts/fetch_sources.py handles both.
+  archive: data/raw/coastline/ne_admin1.zip
   retrieved: 2026-08-05
   sha256: efc59726337323058f9446210adc96673179cd344e053666ee3d28cb58ba2b05
   license: Public domain (Natural Earth)
@@ -188,16 +203,80 @@ basemap:
 basins:
   atlantic:
     enabled: true
-    path: data/raw/hurdat2/hurdat2-atl-1851-2025-02272026.txt
-    url: https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-02272026.txt
-    retrieved: 2026-08-05
-    sha256: 1b9b0c7beed5b4505838658b1d30e159fc84330c60891a58cfcf43ae55c37202
+    path: data/raw/hurdat2/hurdat2-atl-1851-2025-092326.txt
+    url: https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2025-092326.txt
+    retrieved: 2026-10-07
+    sha256: 75202780ce56c8458f16fbef5fb8a026b99b00878dbb95c458211b3e6ef125b4
   pacific:
     enabled: true
-    path: data/raw/hurdat2/hurdat2-nepac-1949-2025-02272026.txt
-    url: https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-02272026.txt
-    retrieved: 2026-08-05
-    sha256: db65f8bc538d5c05e15f738c96111861d6ce3572c007879de58e44d4d05a9cd6
+    path: data/raw/hurdat2/hurdat2-nepac-1949-2025-092926.txt
+    url: https://www.nhc.noaa.gov/data/hurdat/hurdat2-nepac-1949-2025-092926.txt
+    retrieved: 2026-10-07
+    sha256: caece626f7038db64a803a73f5985b563693f0130f3ff16b4b0a0a93c7aa0507
+
+# =============================================================================
+# QA REFERENCE
+# =============================================================================
+# NOAA/AOML's independently-compiled list of continental U.S. hurricane
+# landfalls, used by `hutrackdb qa` as an external cross-check. It is revised
+# alongside HURDAT2 each spring.
+qa_reference:
+  path: data/raw/reference/all_us_hurricanes.html
+  url: https://www.aoml.noaa.gov/hrd/hurdat/All_U.S._Hurricanes.html
+  retrieved: 2026-08-05
+  # Deliberately unpinned: this is a live HTML page, not a versioned release,
+  # so its bytes change with page furniture as well as with content. Pinning it
+  # would produce a checksum failure that means nothing.
+  sha256: null
+
+# =============================================================================
+# ENSO / GULF GENESIS ANALYSIS INPUTS  (scripts/enso_gulf_analysis.py)
+# =============================================================================
+# Inputs to a downstream analysis, NOT to the database build: changing them
+# never makes the committed Parquet stale.
+analysis:
+  # NOAA CPC Relative Oceanic Nino Index, the official ENSO index from
+  # 2026-02-01 (NWS Public Information Statement 26-05). Overlapping 3-month
+  # seasons, 1950 to present. Classification rule: hutrackdb/constants.py.
+  roni:
+    path: data/raw/enso/RONI.ascii.txt
+    url: https://www.cpc.ncep.noaa.gov/data/indices/RONI.ascii.txt
+    retrieved: 2026-10-07
+    # Deliberately unpinned: CPC appends a season every month and may revise
+    # recent values, so a checksum would fail without meaning anything.
+    sha256: null
+
+  # CPC's official season-by-season El Nino / La Nina labels (the coloured
+  # "Cold & Warm Episodes by Season" table). THIS is the source of truth for
+  # ENSO state -- PI decision 2026-10-07. The documented rule applied to
+  # RONI.ascii.txt cannot reproduce it exactly (CPC classifies from unrounded
+  # internal values; ties differ on 4 seasons in 1984), so the rule runs only
+  # as a cross-check, and as the fallback for any season the table lacks.
+  enso_episodes:
+    path: data/raw/enso/roni_episodes.html
+    url: https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/
+    retrieved: 2026-10-07
+    # Live HTML page; its bytes change with page furniture. Unpinned.
+    sha256: null
+
+  # Natural Earth 1:10m marine area polygons, which name the water bodies.
+  # Public domain; same publisher as the coastline.
+  marine_polygons:
+    path: data/raw/marine/ne_10m_geography_marine_polys.zip
+    url: https://naciscdn.org/naturalearth/10m/physical/ne_10m_geography_marine_polys.zip
+    retrieved: 2026-10-07
+    sha256: a2d3395904c41e718e02c3ec5bc988712164c524c236fad32d95d282ca303b2a
+    license: Public domain (Natural Earth)
+
+  # "The Gulf" for genesis purposes = the union of these named polygons.
+  # PI decision 2026-10-07. Natural Earth splits the Bay of Campeche off as its
+  # own feature; IHO S-23 (Limits of Oceans and Seas) counts it as part of the
+  # Gulf, so it is included. A definition by name carries no numeric bounds.
+  gulf_polygon_names: ["Gulf of Mexico", "Bahía de Campeche"]
+
+  # Genesis = the first track point whose status is tropical or subtropical
+  # (constants.TROPICAL_STATUSES), so precursor LO/DB/WV stages are skipped.
+  # PI decision 2026-10-07.
 
 # =============================================================================
 # OUTPUT

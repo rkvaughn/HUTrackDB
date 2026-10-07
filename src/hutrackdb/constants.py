@@ -100,6 +100,16 @@ STATUS_CODES = {
           "nor an extratropical cyclone (of any intensity)",
     "WV": "Tropical Wave (of any intensity)",
     "DB": "Disturbance (of any intensity)",
+    # NOT in the format specification. First seen in the NE/N-Central Pacific
+    # release hurdat2-nepac-1949-2025-092926.txt (2 records, EP161974 Orlene,
+    # 1974-09-24 06Z and 12Z). The same two records read "EX" in the prior
+    # release (hurdat2-nepac-1949-2025-02272026.txt), with identical time,
+    # position and wind. Kept as its own category per PI decision 2026-10-07
+    # rather than silently merged into EX.
+    # TODO: reconcile ET with EX -- confirm with NHC whether ET is a typo or
+    # a new code, then either alias it to EX or document its definition.
+    "ET": "Undocumented; replaced EX on two 1974 records in the 2026-09 "
+          "Pacific release. Pending reconciliation (see TODO above).",
 }
 
 #: Statuses denoting a tropical or subtropical cyclone (as opposed to
@@ -253,3 +263,44 @@ def native_landfall_flagging_is_complete(year: int, *, conus: bool) -> bool:
     """
     eras = NATIVE_LANDFALL_ERAS_CONUS if conus else NATIVE_LANDFALL_ERAS_INTERNATIONAL
     return year_in_eras(year, eras)
+
+
+# ---------------------------------------------------------------------------
+# (b) ENSO classification from the Relative Oceanic Nino Index (RONI)
+#     Source: NWS Public Information Statement 26-05, "Implementing a Relative
+#             Oceanic Nino Index effective February 1, 2026" (13 Jan 2026),
+#             https://www.weather.gov/media/notification/pdf_2026/pns26-05_Relative_ONI.pdf
+#             and NOAA/CPC "Cold & Warm Episodes by Season" (RONI),
+#             https://www.cpc.ncep.noaa.gov/products/analysis_monitoring/enso/roni/
+#     Retrieved 2026-10-07.
+#
+#     The two documents state the boundary inconsistently ("0.5 degrees C or
+#     greater" in the PIS definition; "greater than 0.5" in the episode text).
+#     CPC's published episode table resolves it: the table shows RONI rounded
+#     to 0.1 degC and colours a season when the ROUNDED value is at or beyond
+#     +/-0.5 for at least five consecutive overlapping seasons. Applying that
+#     rule to the two-decimal RONI.ascii.txt reproduces CPC's colouring for
+#     908 of 912 seasons (1950-2025, checked 2026-10-07). The 4 exceptions are
+#     one 1984 stretch (FMA-MJJ) where the file reads exactly -0.45 and CPC's
+#     unrounded value breaks the tie the other way (2 Atlantic storms, June
+#     1984). Because no public CPC file reproduces the table exactly, the PI
+#     decided (2026-10-07) that CPC's published table is the source of truth
+#     for ENSO state; this rule is a cross-check and a fallback for seasons the
+#     table does not yet carry. See hutrackdb.enso.
+# ---------------------------------------------------------------------------
+
+#: Episode threshold, degC, applied to RONI rounded to 0.1 degC.
+ENSO_THRESHOLD_C = 0.5
+
+#: Minimum run of consecutive overlapping 3-month seasons for an episode.
+ENSO_MIN_CONSECUTIVE_SEASONS = 5
+
+#: The overlapping 3-month seasons as labelled in RONI.ascii.txt, in order.
+#: Season i (0-based) is centred on calendar month i + 1, so a storm forming
+#: in month m takes the RONI of RONI_SEASONS[m - 1] for the same year label.
+RONI_SEASONS = ("DJF", "JFM", "FMA", "MAM", "AMJ", "MJJ",
+                "JJA", "JAS", "ASO", "SON", "OND", "NDJ")
+
+ENSO_LA_NINA = "La Nina"
+ENSO_NEUTRAL = "Neutral"
+ENSO_EL_NINO = "El Nino"

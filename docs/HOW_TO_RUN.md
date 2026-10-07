@@ -176,7 +176,8 @@ hutrackdb --help
 ```
 
 ```
-usage: hutrackdb [-h] [--config CONFIG] [-v] {build,qa,gates,provenance} ...
+usage: hutrackdb [-h] [--config CONFIG] [-v]
+                 {build,qa,gates,refresh,provenance} ...
 
 Curated Atlantic/Pacific hurricane track database from NOAA HURDAT2.
 ```
@@ -203,7 +204,7 @@ print(f'{len(lf):,} coastline crossings, {len(us):,} US landfalls')
 **✅ Success looks like exactly this:**
 
 ```
-6,621 coastline crossings, 1,568 US landfalls
+6,598 coastline crossings, 1,563 US landfalls
 ```
 
 If you only wanted to use the data, **you are done.** See
@@ -250,18 +251,25 @@ python scripts/fetch_sources.py
 **⏱ 10 seconds to 2 minutes**, depending on your connection. It downloads about
 40 MB.
 
-**✅ Success looks like** — a `checksum OK` line for each file, ending with:
+**✅ Success looks like** — a `checksum OK` line for each of the four sources,
+ending with:
 
 ```
-extracting ne_admin1.zip
-  -> data/raw/coastline/ne_10m_admin_1_states_provinces
+coastline (Natural Earth)
+  data/raw/coastline/ne_admin1.zip
+  checksum OK (efc5972633732305...)
+  extracting -> data/raw/coastline/ne_10m_admin_1_states_provinces
 
 All sources present and verified.
 ```
 
-**If a checksum mismatches**, NOAA has published a revised file. That is
-expected occasionally and is not a failure of your setup — the message tells you
-what changed and what to do.
+The QA reference is reported as `checksum not pinned` — that one is a live web
+page rather than a versioned release, so it has no fixed checksum to check
+against. That line is normal, not a warning.
+
+**If a checksum mismatches**, NOAA has published a revised HURDAT2 file. That is
+expected roughly once a year and is not a failure of your setup. Don't edit the
+checksum by hand — see Step 13, which adopts the new release properly.
 
 ---
 
@@ -276,7 +284,7 @@ hutrackdb build
 
 **⏱ About 1 minute 45 seconds.** It prints progress as it goes; the quiet
 stretch partway through is the distance-to-coast calculation running over all
-87,631 track points.
+87,584 track points.
 
 **✅ Success looks like** — the calibration register, then:
 
@@ -284,7 +292,7 @@ stretch partway through is the distance-to-coast calculation running over all
 ======================================================================
 BUILD COMPLETE
 ======================================================================
-storms=3,266  track_points=87,631  landfalls=4,260 (US 1,568)  re-entries=2,361  gates=5,007  bypasses=684
+storms=3,250  track_points=87,584  landfalls=4,254 (US 1,563)  re-entries=2,344  gates=5,007  bypasses=687
   geopackage   .../data/processed/hutrackdb.gpkg
   parquet      .../data/processed/parquet
   sqlite       .../data/processed/hutrackdb.sqlite
@@ -332,7 +340,7 @@ Validation of detected landfalls against NOAA/AOML's
 **Status: PASS**
 ```
 
-Further down you should see **285 reference landfalls against 292 detected**.
+Further down you should see **285 reference landfalls against 294 detected**.
 The report is also written to `data/processed/qa_report.md`.
 
 > The two counts are not expected to be identical, and the report explains every
@@ -402,6 +410,89 @@ Try a short range first if you want a quick preview — this takes a few seconds
 ```bash
 python scripts/animate_landfalls.py --preset share --seasons 2000 2010 --out preview.gif
 ```
+
+---
+
+## Step 13 — Keep the data current (once a year)
+
+The hurricane record is not static. NOAA revises HURDAT2 **once a year, usually
+between February and May**, after the National Hurricane Center finishes its
+post-season analysis. A revision adds the season just past and can also correct
+earlier storms, so last year's build slowly goes out of date.
+
+You do not have to track this yourself. Ask:
+
+```bash
+hutrackdb refresh --check
+```
+
+**⏱ A couple of seconds.** It only reads NOAA's file listing — nothing is
+downloaded and nothing on your machine changes.
+
+**✅ Success looks like** one of two answers. If you are current:
+
+```
+  atlantic
+    in use : hurdat2-1851-2025-02272026.txt
+    latest : hurdat2-1851-2025-02272026.txt  (through the 2025 season, revised 2026-02-27)
+    status : UP TO DATE
+```
+
+or, once NOAA publishes the next one:
+
+```
+    status : NEWER RELEASE AVAILABLE
+```
+
+If a newer release exists, take it with:
+
+```bash
+hutrackdb refresh
+```
+
+**⏱ About 5 minutes.** This is the one command that does everything: it
+downloads the new release, records it in `config/pipeline.yaml` along with a
+checksum it computes from the download, rebuilds every output, re-runs the QA
+comparison, re-executes the notebook, regenerates the animation, and checks the
+counts quoted in the README and docs against the new data.
+
+**✅ Success looks like** a report card at the end with every line reading `ok`:
+
+```
+======================================================================
+REFRESH COMPLETE
+======================================================================
+  ok    rebuild the database
+  ok    re-run the QA validation
+  ok    re-execute the notebook
+  ok    regenerate the README animation
+  ok    check the counts quoted in the docs
+```
+
+**If a line reads `FAIL`**, that step's own output appears above it explaining
+why. The rest of the refresh still completed — a failed notebook does not mean
+the rebuilt database is wrong.
+
+> **Two things still need a person, and the command says so.**
+>
+> **Read the QA report** at `data/processed/qa_report.md` rather than just
+> noting that it ran. A new season should move the comparison by a season's
+> worth of storms. A large swing would mean the release changed something
+> deeper, and that is worth understanding before relying on the result.
+>
+> **If `check the counts quoted in the docs` fails**, the README and docs quote
+> figures like "3,250 storms" that are written into the prose by hand. The check
+> names each file and the number it should now read. Edit them, then re-run:
+>
+> ```bash
+> python scripts/check_doc_counts.py
+> ```
+
+**Why the checksum works this way.** A pinned checksum proves the file you build
+from today is the same file you built from last time. It cannot vouch for a
+release you have never seen. So `refresh` computes the checksum from what it
+downloads and records it, and every run after that enforces it — which is why
+`fetch_sources.py` reports a mismatch if the bytes ever change underneath you.
 
 ---
 

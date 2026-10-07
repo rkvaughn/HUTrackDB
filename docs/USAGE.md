@@ -62,7 +62,7 @@ df = pd.read_sql("SELECT * FROM landfalls WHERE is_landfall = 1", con)
 
 ## Intensity at landfall
 
-The exact and 6-hourly intensities differ for **1,768** landfalls. Pick
+The exact and 6-hourly intensities differ for **1,766** landfalls. Pick
 deliberately.
 
 ```sql
