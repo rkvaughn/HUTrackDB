@@ -45,3 +45,9 @@ to the repo as a standalone output.
 docs/assets/gulf_genesis_vs_roni.png (committed, ~80 KB) on every run; the
 README embeds it; CLAUDE.md lists it as a build-derived binary to regenerate
 after rebuilds.
+
+**Follow-up prompt:** Commit the four-panel figure to the repo.
+
+**Output:** scripts/enso_gulf_analysis.py now writes the four-panel figure to
+docs/assets/enso_gulf_landfall.png (committed) by default; README embeds it;
+CLAUDE.md lists both analysis PNGs as build-derived binaries.

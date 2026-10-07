@@ -279,12 +279,14 @@ or invent one.
    path by default. Keep it small, and do not move the large full-resolution
    render into git alongside it.
 
-5. **The Gulf-genesis-vs-RONI figure.** `docs/assets/gulf_genesis_vs_roni.png`
-   (~80 KB) is committed at the PI's request (2026-10-07). It is derived from
-   the same tables plus the RONI inputs. Regenerate it with
-   `python scripts/enso_gulf_analysis.py`, which writes to that path by default.
-   Together with the GIF, these are the only build-derived binaries in git;
-   the full four-panel figure stays in the ignored `data/processed/analysis/`.
+5. **The ENSO analysis figures.** `docs/assets/enso_gulf_landfall.png` (the
+   four-panel figure) and `docs/assets/gulf_genesis_vs_roni.png` (standalone)
+   are committed at the PI's request (2026-10-07). Both derive from the same
+   tables plus the RONI inputs, and the panels quote counts and fitted values.
+   Regenerate both with `python scripts/enso_gulf_analysis.py`, which writes to
+   those paths by default. Together with the GIF, these are the only
+   build-derived binaries in git; the CSV tables stay in the ignored
+   `data/processed/analysis/`.
 
    `python scripts/check_doc_counts.py` locates the headline ones precisely;
    `grep -rn "3,266\|87,631\|4,260\|5,007" README.md docs/` finds the rest.

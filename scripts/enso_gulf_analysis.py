@@ -27,10 +27,10 @@ Definitions (PI decisions 2026-10-07, recorded in config/pipeline.yaml):
 
 These are associations in the observational record, not causal estimates, and
 the record's detection of weak and short-lived storms improves over the period
-(aircraft reconnaissance, then satellites). Reads the committed Parquet; writes
-the figure and its tables to data/processed/analysis/ (not committed), plus a
-standalone Gulf-share-vs-RONI figure to docs/assets/gulf_genesis_vs_roni.png
-(committed -- regenerate after any rebuild).
+(aircraft reconnaissance, then satellites). Reads the committed Parquet. Writes two
+committed figures -- the four-panel docs/assets/enso_gulf_landfall.png and the
+standalone docs/assets/gulf_genesis_vs_roni.png (regenerate both after any
+rebuild) -- and its tables to data/processed/analysis/ (not committed).
 """
 
 from __future__ import annotations
@@ -453,6 +453,9 @@ def draw_gulf_share_vs_roni(storms, fit, level, notes, out: Path):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--figure-out", type=Path,
+                        default=ROOT / "docs" / "assets" / "enso_gulf_landfall.png",
+                        help="the committed four-panel figure")
     parser.add_argument("--standalone-out", type=Path,
                         default=ROOT / "docs" / "assets" / "gulf_genesis_vs_roni.png",
                         help="the committed standalone Gulf-share-vs-RONI figure")
@@ -481,7 +484,7 @@ def main() -> int:
     for name, table in tables.items():
         table.to_csv(args.out_dir / f"{name}.csv", index=False)
     storms.drop(columns=["timestamp_utc"]).to_csv(args.out_dir / "storms_enso.csv", index=False)
-    figure = args.out_dir / "enso_gulf_landfall.png"
+    figure = args.figure_out
     rates = genesis_rate_models(storms, config, notes)
     draw(storms, tables, rates, level, notes, figure)
     draw_gulf_share_vs_roni(storms, fit, level, notes, args.standalone_out)
@@ -502,7 +505,7 @@ def main() -> int:
               f"{rates[key + '_storms']} storms in {rates[key + '_months']} months")
     print(f"Gulf vs rest slope difference p={rates['diff_p']:.3g}")
     rates["months"].to_csv(args.out_dir / "monthly_genesis_counts.csv", index=False)
-    print(f"\nwrote {figure.relative_to(ROOT)}")
+    print(f"\nwrote {figure}")
     print(f"wrote {args.standalone_out}")
     return 0
 

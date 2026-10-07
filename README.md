@@ -335,8 +335,10 @@ Discrepancies are **classified, not suppressed**:
 ## Analysis: ENSO, Gulf genesis and U.S. landfall
 
 ```bash
-python scripts/enso_gulf_analysis.py   # figure + tables -> data/processed/analysis/
+python scripts/enso_gulf_analysis.py   # figures -> docs/assets/, tables -> data/processed/analysis/
 ```
+
+![ENSO, Gulf genesis and U.S. landfall: four panels](docs/assets/enso_gulf_landfall.png)
 
 For Atlantic storms in the seasons the RONI record covers (1950 onward), the
 figure has four panels:
@@ -349,8 +351,8 @@ figure has four panels:
 - **C:** the share of storms forming in the Gulf, by peak lifetime strength.
 - **D:** U.S. landfall of Gulf-born storms, by ENSO state.
 
-The script also writes one standalone figure, which is committed: the share of
-storms forming in the Gulf against continuous RONI, with a logistic fit.
+The script also writes a standalone figure: the share of storms forming in the
+Gulf against continuous RONI, with a logistic fit.
 
 ![Share of Atlantic storms forming in the Gulf vs. RONI](docs/assets/gulf_genesis_vs_roni.png)
 
@@ -406,6 +408,8 @@ scripts/
   enso_gulf_analysis.py       Gulf genesis / U.S. landfall vs ENSO and strength
 docs/assets/
   landfalling_storms.gif      README animation; regenerate with --preset share
+  enso_gulf_landfall.png      four-panel ENSO figure (enso_gulf_analysis.py)
+  gulf_genesis_vs_roni.png    standalone Gulf share vs RONI (same script)
 docs/
   HOW_TO_RUN.md               step-by-step setup and rebuild guide
   ...                         methodology, fields, gates, coastline
