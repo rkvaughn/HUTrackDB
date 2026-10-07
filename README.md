@@ -349,6 +349,11 @@ figure has four panels:
 - **C:** the share of storms forming in the Gulf, by peak lifetime strength.
 - **D:** U.S. landfall of Gulf-born storms, by ENSO state.
 
+The script also writes one standalone figure, which is committed: the share of
+storms forming in the Gulf against continuous RONI, with a logistic fit.
+
+![Share of Atlantic storms forming in the Gulf vs. RONI](docs/assets/gulf_genesis_vs_roni.png)
+
 Definitions (PI decisions 2026-10-07):
 
 - **Genesis** is the first track point with tropical or subtropical status.

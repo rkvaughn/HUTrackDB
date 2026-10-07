@@ -28,7 +28,9 @@ Definitions (PI decisions 2026-10-07, recorded in config/pipeline.yaml):
 These are associations in the observational record, not causal estimates, and
 the record's detection of weak and short-lived storms improves over the period
 (aircraft reconnaissance, then satellites). Reads the committed Parquet; writes
-the figure and its tables to data/processed/analysis/ (not committed).
+the figure and its tables to data/processed/analysis/ (not committed), plus a
+standalone Gulf-share-vs-RONI figure to docs/assets/gulf_genesis_vs_roni.png
+(committed -- regenerate after any rebuild).
 """
 
 from __future__ import annotations
@@ -386,9 +388,74 @@ def draw(storms, tables, rates, level, notes, out: Path):
     plt.close(fig)
 
 
+def draw_gulf_share_vs_roni(storms, fit, level, notes, out: Path):
+    """Standalone: P(genesis in the Gulf | RONI at genesis), logistic fit.
+
+    The original panel B. Committed to docs/assets/, so it is a build-derived
+    binary like the README animation: regenerate it after any rebuild.
+    """
+    fig, ax = plt.subplots(figsize=(8.5, 5.6))
+    pct = f"{level:.0%}"
+    grid = np.linspace(storms.roni.min(), storms.roni.max(), len(storms))
+    p, lo, hi = fit.predict(grid, level)
+    for sign in (-1, 1):
+        ax.axvline(sign * ENSO_THRESHOLD_C, color=AXIS, linewidth=0.8, zorder=1)
+    ax.fill_between(grid, lo, hi, color=SEQ_BLUE[0], linewidth=0, zorder=2,
+                    label=f"{pct} confidence band")
+    ax.plot(grid, p, color=BLUE, linewidth=2, zorder=3, label="logistic fit")
+    trans = ax.get_xaxis_transform()
+    for flag, (y0, y1) in ((False, (0, 0.035)), (True, (0.965, 1))):
+        xs = storms.loc[storms.gulf_genesis == flag, "roni"]
+        ax.vlines(xs, y0, y1, transform=trans, color=INK_MUTED,
+                  linewidth=0.5, alpha=0.6, zorder=1)
+    ax.text(0.005, 0.955, "each tick: a storm forming in the Gulf",
+            transform=ax.transAxes, fontsize=7.5, color=INK_MUTED, va="top")
+    ax.text(0.005, 0.045, "each tick: a storm forming elsewhere",
+            transform=ax.transAxes, fontsize=7.5, color=INK_MUTED, va="bottom")
+    for label, xpos, ha in (("La Nina", -ENSO_THRESHOLD_C, "right"),
+                            ("El Nino", ENSO_THRESHOLD_C, "left")):
+        ax.annotate(label, (xpos, 0.9), xycoords=("data", "axes fraction"),
+                    xytext=(-4 if ha == "right" else 4, 0),
+                    textcoords="offset points", ha=ha, fontsize=8, color=INK_MUTED)
+    ci_lo, ci_hi = fit.slope_interval(level)
+    ax.text(0.98, 0.80,
+            f"odds ratio per +1 °C RONI: {np.exp(fit.slope):.2f}\n"
+            f"{pct} CI {np.exp(ci_lo):.2f}–{np.exp(ci_hi):.2f}, "
+            f"p = {fit.slope_p_value():.2f}\n"
+            f"n = {fit.n:,} storms, {fit.events} in the Gulf",
+            transform=ax.transAxes, ha="right", va="top", fontsize=8.5,
+            color=INK_SECOND)
+    ax.set_ylim(0, max(hi.max(), storms.gulf_genesis.mean()) * 1.6)
+    ax.set_xlabel("RONI at genesis (°C)")
+    ax.set_ylabel("P(genesis in the Gulf)")
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 0.06))
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.xaxis.grid(False)
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
+    ax.set_title(
+        f"Share of Atlantic storms forming in the Gulf vs. RONI, "
+        f"{notes['first_season']}–{notes['last_season']}")
+    fig.text(
+        0.01, 0.015,
+        "Genesis = first tropical/subtropical track point. Gulf = Natural Earth "
+        "'Gulf of Mexico' + 'Bahia de Campeche'. RONI = NOAA CPC, 3-month season "
+        "centred on the genesis month.\nAssociation in the observational record, "
+        "not a causal effect. Source: HUTrackDB scripts/enso_gulf_analysis.py "
+        "(NOAA NHC HURDAT2, NOAA CPC, Natural Earth).",
+        fontsize=7, color=INK_MUTED, va="bottom", linespacing=1.5)
+    fig.subplots_adjust(left=0.09, right=0.98, top=0.92, bottom=0.2)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--standalone-out", type=Path,
+                        default=ROOT / "docs" / "assets" / "gulf_genesis_vs_roni.png",
+                        help="the committed standalone Gulf-share-vs-RONI figure")
     parser.add_argument("--out-dir", type=Path,
                         default=ROOT / "data" / "processed" / "analysis")
     args = parser.parse_args()
@@ -417,6 +484,7 @@ def main() -> int:
     figure = args.out_dir / "enso_gulf_landfall.png"
     rates = genesis_rate_models(storms, config, notes)
     draw(storms, tables, rates, level, notes, figure)
+    draw_gulf_share_vs_roni(storms, fit, level, notes, args.standalone_out)
 
     print(f"storms analysed: {len(storms):,} "
           f"({notes['first_season']}-{notes['last_season']})")
@@ -435,6 +503,7 @@ def main() -> int:
     print(f"Gulf vs rest slope difference p={rates['diff_p']:.3g}")
     rates["months"].to_csv(args.out_dir / "monthly_genesis_counts.csv", index=False)
     print(f"\nwrote {figure.relative_to(ROOT)}")
+    print(f"wrote {args.standalone_out}")
     return 0
 
 

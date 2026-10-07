@@ -251,7 +251,7 @@ the checksum from its download and records it, and every later run enforces it.
 This is the one legitimate way a checksum enters the config — never transcribe
 or invent one.
 
-### Three things go stale *together* — don't refresh only the Parquet
+### These go stale *together* — don't refresh only the Parquet
 
 1. **The Parquet tables.**
 2. **The notebook's committed outputs.** Its figures and printed counts are
@@ -276,9 +276,15 @@ or invent one.
    (891 KB) because it is the repository's landing-page image, and it is derived
    from the same tables. Regenerate with
    `python scripts/animate_landfalls.py --preset share`, which writes to that
-   path by default. It is the one build-derived binary that IS committed; keep
-   it small, and do not move the large full-resolution render into git alongside
-   it.
+   path by default. Keep it small, and do not move the large full-resolution
+   render into git alongside it.
+
+5. **The Gulf-genesis-vs-RONI figure.** `docs/assets/gulf_genesis_vs_roni.png`
+   (~80 KB) is committed at the PI's request (2026-10-07). It is derived from
+   the same tables plus the RONI inputs. Regenerate it with
+   `python scripts/enso_gulf_analysis.py`, which writes to that path by default.
+   Together with the GIF, these are the only build-derived binaries in git;
+   the full four-panel figure stays in the ignored `data/processed/analysis/`.
 
    `python scripts/check_doc_counts.py` locates the headline ones precisely;
    `grep -rn "3,266\|87,631\|4,260\|5,007" README.md docs/` finds the rest.

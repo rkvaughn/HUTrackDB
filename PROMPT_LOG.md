@@ -37,3 +37,11 @@ version. It uses a Poisson model with calendar-month fixed effects (Pearson
 dispersion ~1.0). Rate per +1 degC: basin x0.86 (95% CI 0.80-0.92), Gulf
 x0.79 (0.64-0.97); Gulf vs rest-of-basin slope difference p = 0.42. Added
 `stats.fit_poisson` + closed-form test.
+
+**Follow-up prompt:** Add the original panel B (Gulf share vs RONI, logistic)
+to the repo as a standalone output.
+
+**Output:** `draw_gulf_share_vs_roni` in scripts/enso_gulf_analysis.py writes
+docs/assets/gulf_genesis_vs_roni.png (committed, ~80 KB) on every run; the
+README embeds it; CLAUDE.md lists it as a build-derived binary to regenerate
+after rebuilds.
